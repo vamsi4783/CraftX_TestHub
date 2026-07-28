@@ -1,0 +1,38 @@
+import { useMemo } from 'react';
+import { RouterProvider } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { ThemeProvider, CssBaseline } from '@mui/material';
+import { AuthProvider } from '@/hooks/useAuth';
+import { useThemeMode } from '@/hooks/useThemeMode';
+import { buildTheme } from '@/theme';
+import { queryClient } from '@/lib/queryClient';
+import { router } from '@/routes';
+import { ToastProvider } from '@/components/common/ToastProvider';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+
+function ThemedApp() {
+  const { mode } = useThemeMode();
+  const theme = useMemo(() => buildTheme(mode), [mode]);
+
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <ErrorBoundary>
+        <AuthProvider>
+          <RouterProvider router={router} />
+          <ToastProvider />
+        </AuthProvider>
+      </ErrorBoundary>
+    </ThemeProvider>
+  );
+}
+
+export function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemedApp />
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
+  );
+}
