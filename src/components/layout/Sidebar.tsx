@@ -12,6 +12,10 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import PlayCircleIcon from '@mui/icons-material/PlayCircle';
 import LightbulbIcon from '@mui/icons-material/Lightbulb';
 import BarChartIcon from '@mui/icons-material/BarChart';
+import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
+import QueryStatsIcon from '@mui/icons-material/QueryStats';
+import GroupsIcon from '@mui/icons-material/Groups';
+import HistoryIcon from '@mui/icons-material/History';
 import PeopleIcon from '@mui/icons-material/People';
 import SettingsIcon from '@mui/icons-material/Settings';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
@@ -45,7 +49,11 @@ const NAV: NavItem[] = [
   { label: 'Bugs',             path: '/bugs',         icon: <BugReportIcon /> },
   { label: 'Feature Requests', path: '/features',     icon: <LightbulbIcon /> },
   { label: 'Modules',          path: '/modules',      icon: <ExtensionIcon /> },
-  { label: 'Reports',          path: '/reports',      icon: <BarChartIcon />, dividerBefore: true },
+  { label: 'Reports',          path: '/reports',            icon: <BarChartIcon />,          dividerBefore: true },
+  { label: 'Bug Analytics',    path: '/analytics/bugs',     icon: <BugReportOutlinedIcon /> },
+  { label: 'Test Analytics',   path: '/analytics/tests',    icon: <QueryStatsIcon /> },
+  { label: 'Team Performance', path: '/analytics/team',     icon: <GroupsIcon /> },
+  { label: 'Release History',  path: '/analytics/releases', icon: <HistoryIcon /> },
   { label: 'Users',            path: '/users',        icon: <PeopleIcon />, adminOnly: true },
   { label: 'Settings',         path: '/settings',     icon: <SettingsIcon />, dividerBefore: true },
 ];

@@ -21,6 +21,10 @@ import { BugsPage } from '@/features/bugs/BugsPage';
 import { BugDetailPage } from '@/features/bugs/BugDetailPage';
 import { FeatureRequestsPage } from '@/features/feature-requests/FeatureRequestsPage';
 import { ReportsPage } from '@/features/reports/ReportsPage';
+import { BugAnalyticsPage } from '@/features/analytics/BugAnalyticsPage';
+import { TestAnalyticsPage } from '@/features/analytics/TestAnalyticsPage';
+import { TeamPerformancePage } from '@/features/analytics/TeamPerformancePage';
+import { ReleaseHistoryPage } from '@/features/analytics/ReleaseHistoryPage';
 import { UsersPage } from '@/features/users/UsersPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { NotificationsPage } from '@/features/notifications/NotificationsPage';
@@ -158,7 +162,11 @@ export const router = createBrowserRouter([
       { path: 'bugs/:id',            element: <P><BugDetailPage /></P> },
       { path: 'features',            element: <P><FeatureRequestsPage /></P> },
       { path: 'modules',             element: <P><ModulesPage /></P> },
-      { path: 'reports',             element: <P><ReportsPage /></P> },
+      { path: 'reports',              element: <P><ReportsPage /></P> },
+      { path: 'analytics/bugs',      element: <P><BugAnalyticsPage /></P> },
+      { path: 'analytics/tests',     element: <P><TestAnalyticsPage /></P> },
+      { path: 'analytics/team',      element: <P><TeamPerformancePage /></P> },
+      { path: 'analytics/releases',  element: <P><ReleaseHistoryPage /></P> },
       { path: 'users',               element: <P roles={['administrator']}><UsersPage /></P> },
       { path: 'settings',            element: <P><SettingsPage /></P> },
       { path: 'notifications',       element: <P><NotificationsPage /></P> },

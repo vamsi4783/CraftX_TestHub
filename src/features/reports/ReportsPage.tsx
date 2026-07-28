@@ -2,212 +2,300 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Box, Grid, Card, CardContent, Typography, Button, FormControl,
-  InputLabel, Select, MenuItem, Divider, Chip, LinearProgress,
+  InputLabel, Select, MenuItem, Divider, List, ListItem, ListItemIcon,
+  ListItemText, CircularProgress, Alert, Chip,
 } from '@mui/material';
-import {
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line,
-  AreaChart, Area,
-} from 'recharts';
 import DownloadIcon from '@mui/icons-material/Download';
-import BarChartIcon from '@mui/icons-material/BarChart';
+import TableViewIcon from '@mui/icons-material/TableView';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import AssessmentIcon from '@mui/icons-material/Assessment';
+import BugReportIcon from '@mui/icons-material/BugReport';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import VerifiedIcon from '@mui/icons-material/Verified';
+import SummarizeIcon from '@mui/icons-material/Summarize';
 import { projectService } from '@/services/projectService';
 import { releaseService } from '@/services/releaseService';
-import { bugService } from '@/services/bugService';
+import { analyticsService } from '@/services/analyticsService';
 import { PageHeader } from '@/components/common/PageHeader';
-import { LoadingState } from '@/components/common/LoadingState';
-import type { ReadinessVerdict } from '@/types';
+import { EmptyState } from '@/components/common/EmptyState';
+import { downloadCSV, downloadExcel, printReport, rowsToHTMLTable } from '@/lib/export';
 
-const COLORS = { critical: '#7C3AED', high: '#EF4444', medium: '#F59E0B', low: '#10B981' };
-const STATUS_COLORS: Record<string, string> = {
-  new: '#EF4444', triaged: '#F59E0B', assigned: '#3B82F6', in_progress: '#4F46E5',
-  ready_for_qa: '#06B6D4', verified: '#10B981', closed: '#6B7280',
-};
+interface ReportDef {
+  id: string;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  formats: ('csv' | 'excel' | 'pdf')[];
+  needsRelease?: boolean;
+}
 
-const VERDICT_LABEL: Record<ReadinessVerdict, string> = {
-  not_ready: '🔴 Not Ready', ready_with_risks: '🟡 Ready with Risks', ready_for_release: '🟢 Ready',
-};
+const REPORTS: ReportDef[] = [
+  {
+    id: 'bug_summary',
+    label: 'Bug Summary Report',
+    description: 'All bugs with severity, status, assignee, module, and resolution details.',
+    icon: <BugReportIcon color="error" />,
+    formats: ['csv', 'excel', 'pdf'],
+  },
+  {
+    id: 'test_results',
+    label: 'Test Execution Report',
+    description: 'Test results with executor, status, duration, and environment.',
+    icon: <AssignmentIcon color="primary" />,
+    formats: ['csv', 'excel', 'pdf'],
+  },
+  {
+    id: 'release_readiness',
+    label: 'Release Readiness Report',
+    description: 'Readiness score breakdown for a specific release.',
+    icon: <AssessmentIcon color="warning" />,
+    formats: ['csv', 'pdf'],
+    needsRelease: true,
+  },
+  {
+    id: 'qa_signoff',
+    label: 'QA Sign-off Report',
+    description: 'QA approval checklist and decision for a release.',
+    icon: <VerifiedIcon color="success" />,
+    formats: ['csv', 'pdf'],
+    needsRelease: true,
+  },
+  {
+    id: 'executive',
+    label: 'Executive Summary',
+    description: 'High-level overview: bug counts, pass rates, open critical issues.',
+    icon: <SummarizeIcon color="action" />,
+    formats: ['pdf'],
+  },
+];
 
 export function ReportsPage() {
-  const [selectedProject, setSelectedProject] = useState('');
-  const [selectedRelease, setSelectedRelease] = useState('');
+  const [projectId, setProjectId]   = useState('');
+  const [releaseId, setReleaseId]   = useState('');
+  const [generating, setGenerating] = useState<string | null>(null);
+  const [error, setError]           = useState<string | null>(null);
 
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: () => projectService.list() });
   const { data: releases = [] } = useQuery({
-    queryKey: ['releases', selectedProject], queryFn: () => releaseService.list(selectedProject), enabled: !!selectedProject,
+    queryKey: ['releases', projectId],
+    queryFn: () => releaseService.list(projectId),
+    enabled: !!projectId,
   });
   const { data: readiness } = useQuery({
-    queryKey: ['readiness', selectedRelease], queryFn: () => releaseService.getReadiness(selectedRelease), enabled: !!selectedRelease,
+    queryKey: ['release-readiness', releaseId],
+    queryFn: () => releaseService.getReadiness(releaseId),
+    enabled: !!releaseId,
   });
-  const { data: bugStats } = useQuery({
-    queryKey: ['bug-stats', selectedProject], queryFn: () => bugService.getStats(selectedProject), enabled: !!selectedProject,
-  });
-  const { data: bugs = [] } = useQuery({
-    queryKey: ['bugs-report', selectedProject], queryFn: () => bugService.list(selectedProject), enabled: !!selectedProject,
+  const { data: approval } = useQuery({
+    queryKey: ['qa-approval', releaseId],
+    queryFn: () => releaseService.getApproval(releaseId),
+    enabled: !!releaseId,
   });
 
-  const sev = bugStats?.bySeverity as Record<string, number> | undefined;
-  const sta = bugStats?.byStatus as Record<string, number> | undefined;
+  const selectedProject = projects.find(p => p.id === projectId);
+  const selectedRelease = releases.find(r => r.id === releaseId);
 
-  const severityData = ['critical','high','medium','low'].map(s => ({
-    name: s.charAt(0).toUpperCase() + s.slice(1),
-    value: sev?.[s] ?? 0,
-  })).filter(d => d.value > 0);
+  async function generate(reportId: string, format: 'csv' | 'excel' | 'pdf') {
+    if (!projectId) { setError('Select a project first.'); return; }
+    setError(null);
+    setGenerating(`${reportId}-${format}`);
+    try {
+      const timestamp = new Date().toISOString().split('T')[0];
+      const pName = selectedProject?.name ?? 'project';
 
-  const statusData = Object.keys(STATUS_COLORS).map(status => ({
-    name: status.replace(/_/g,' '),
-    value: sta?.[status] ?? 0,
-  })).filter(d => d.value > 0);
+      if (reportId === 'bug_summary') {
+        const rows = await analyticsService.exportBugs(projectId);
+        if (!rows.length) throw new Error('No bugs found for this project.');
+        if (format === 'csv')   downloadCSV(rows, `bug-summary-${pName}-${timestamp}.csv`);
+        if (format === 'excel') downloadExcel({ 'Bug Summary': rows }, `bug-summary-${pName}-${timestamp}.xlsx`);
+        if (format === 'pdf')   printReport(`Bug Summary — ${pName}`, rowsToHTMLTable(rows));
+      }
 
-  // Trend: count bugs by week (last 8 weeks)
-  const weekTrend = Array.from({ length: 8 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (7 - i) * 7);
-    const label = `W${i + 1}`;
-    const count = bugs.filter(b => new Date(b.created_at) <= d).length;
-    return { name: label, bugs: count };
-  });
+      if (reportId === 'test_results') {
+        const rows = await analyticsService.exportTestResults(projectId);
+        if (!rows.length) throw new Error('No test results found.');
+        if (format === 'csv')   downloadCSV(rows, `test-results-${pName}-${timestamp}.csv`);
+        if (format === 'excel') downloadExcel({ 'Test Results': rows }, `test-results-${pName}-${timestamp}.xlsx`);
+        if (format === 'pdf')   printReport(`Test Execution Report — ${pName}`, rowsToHTMLTable(rows));
+      }
+
+      if (reportId === 'release_readiness') {
+        if (!releaseId || !readiness) throw new Error('Select a release first.');
+        const rName = selectedRelease?.name ?? 'release';
+        const rows = [{
+          'Release':            rName,
+          'Version':            selectedRelease?.version ?? '',
+          'Status':             selectedRelease?.status ?? '',
+          'Verdict':            readiness.verdict.replace(/_/g, ' '),
+          'Testing %':          `${readiness.testing_percentage}%`,
+          'Pass Rate':          `${readiness.pass_rate}%`,
+          'Total Tests':        readiness.total_tests,
+          'Completed Tests':    readiness.completed_tests,
+          'Total Bugs':         readiness.total_bugs,
+          'Critical Bugs':      readiness.critical_bugs,
+          'Open Bugs':          readiness.open_bugs,
+        }];
+        if (format === 'csv') downloadCSV(rows, `readiness-${rName}-${timestamp}.csv`);
+        if (format === 'pdf') printReport(`Release Readiness — ${rName}`, rowsToHTMLTable(rows));
+      }
+
+      if (reportId === 'qa_signoff') {
+        if (!releaseId) throw new Error('Select a release first.');
+        const rName = selectedRelease?.name ?? 'release';
+        const cl = (approval?.checklist ?? {}) as Record<string, boolean>;
+        const rows = Object.entries({
+          'Critical Bugs Closed':       cl.critical_bugs_closed,
+          'Required Tests Executed':    cl.required_tests_executed,
+          'Coverage Target Reached':    cl.coverage_target_reached,
+          'No Blocked Tests':           cl.no_blocked_tests,
+          'Release Notes Completed':    cl.release_notes_completed,
+          'Known Issues Documented':    cl.known_issues_documented,
+          'Regression Passed':          cl.regression_passed,
+        }).map(([item, done]) => ({
+          'Checklist Item': item,
+          'Status':         done ? '✅ Complete' : '❌ Incomplete',
+        }));
+        rows.push({ 'Checklist Item': 'QA DECISION', 'Status': (approval?.status ?? 'pending').toUpperCase() });
+        if (format === 'csv') downloadCSV(rows, `qa-signoff-${rName}-${timestamp}.csv`);
+        if (format === 'pdf') printReport(`QA Sign-off — ${rName}`, rowsToHTMLTable(rows));
+      }
+
+      if (reportId === 'executive') {
+        const bugs = await analyticsService.exportBugs(projectId);
+        const openBugs   = bugs.filter(b => !['Closed','Verified','Rejected'].includes(String(b['Status'])));
+        const closedBugs = bugs.filter(b => ['Closed','Verified'].includes(String(b['Status'])));
+        const critical   = bugs.filter(b => b['Severity'] === 'critical' && !['Closed','Verified','Rejected'].includes(String(b['Status'])));
+        const summary = [{
+          'Project':             pName,
+          'Report Date':         new Date().toLocaleDateString(),
+          'Total Bugs':          bugs.length,
+          'Open Bugs':           openBugs.length,
+          'Closed / Verified':   closedBugs.length,
+          'Critical Open':       critical.length,
+          'Release':             selectedRelease?.name ?? 'N/A',
+          'Readiness Verdict':   readiness?.verdict.replace(/_/g, ' ') ?? 'N/A',
+          'Testing %':           readiness ? `${readiness.testing_percentage}%` : 'N/A',
+          'Pass Rate':           readiness ? `${readiness.pass_rate}%` : 'N/A',
+          'QA Approval':         approval?.status?.replace(/_/g, ' ') ?? 'N/A',
+        }];
+        const html = `
+          <h2 style="margin-bottom:16px">Executive QA Summary — ${pName}</h2>
+          ${rowsToHTMLTable(summary)}
+          <h3 style="margin:20px 0 8px">Open Bugs</h3>
+          ${rowsToHTMLTable(openBugs.slice(0, 50))}
+        `;
+        printReport(`Executive QA Summary — ${pName}`, html);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Report generation failed.');
+    } finally {
+      setGenerating(null);
+    }
+  }
+
+  const isGenerating = (id: string) => generating === id;
 
   return (
     <Box>
-      <PageHeader
-        title="Reports & Analytics"
-        subtitle="Quality insights, trends, and release readiness across your projects."
-        actions={
-          <Button variant="outlined" startIcon={<DownloadIcon />} disabled>Export PDF</Button>
-        }
-      />
+      <PageHeader title="Reports & Exports" subtitle="Generate PDF, Excel, and CSV reports from live data." />
 
       {/* Filters */}
       <Box display="flex" gap={2} mb={3} flexWrap="wrap">
-        <FormControl size="small" sx={{ minWidth: 200 }}>
-          <InputLabel>Project</InputLabel>
-          <Select label="Project" value={selectedProject} onChange={e => { setSelectedProject(e.target.value); setSelectedRelease(''); }}>
-            <MenuItem value="">— Select Project —</MenuItem>
+        <FormControl size="small" sx={{ minWidth: 220 }}>
+          <InputLabel>Project *</InputLabel>
+          <Select label="Project *" value={projectId} onChange={e => { setProjectId(e.target.value); setReleaseId(''); }}>
+            <MenuItem value="">— Select project —</MenuItem>
             {projects.map(p => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
           </Select>
         </FormControl>
-        {selectedProject && (
-          <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel>Release</InputLabel>
-            <Select label="Release" value={selectedRelease} onChange={e => setSelectedRelease(e.target.value)}>
-              <MenuItem value="">— All Releases —</MenuItem>
-              {releases.map(r => <MenuItem key={r.id} value={r.id}>{r.name} v{r.version}</MenuItem>)}
-            </Select>
-          </FormControl>
-        )}
+        <FormControl size="small" sx={{ minWidth: 220 }}>
+          <InputLabel>Release (optional)</InputLabel>
+          <Select label="Release (optional)" value={releaseId} onChange={e => setReleaseId(e.target.value)} disabled={!projectId}>
+            <MenuItem value="">— All releases —</MenuItem>
+            {releases.map(r => <MenuItem key={r.id} value={r.id}>{r.name} v{r.version}</MenuItem>)}
+          </Select>
+        </FormControl>
       </Box>
 
-      {!selectedProject ? (
-        <Box textAlign="center" py={8}>
-          <BarChartIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
-          <Typography variant="h6" color="text.secondary">Select a project to view reports</Typography>
-        </Box>
+      {error && <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>{error}</Alert>}
+
+      {!projectId ? (
+        <EmptyState icon={AssessmentIcon} title="Select a project" description="Choose a project to generate reports." />
       ) : (
         <Grid container spacing={3}>
-          {/* Release Readiness */}
-          {readiness && (
-            <Grid item xs={12}>
-              <Card sx={{ border: `2px solid ${readiness.verdict === 'ready_for_release' ? '#10B981' : readiness.verdict === 'ready_with_risks' ? '#F59E0B' : '#EF4444'}` }}>
-                <CardContent>
-                  <Box display="flex" alignItems="center" gap={2} mb={2}>
-                    <Typography variant="h6" fontWeight={800}>{VERDICT_LABEL[readiness.verdict as ReadinessVerdict]}</Typography>
-                    <Typography variant="body2" color="text.secondary">Release Readiness Score</Typography>
-                  </Box>
-                  <Grid container spacing={3}>
-                    {[
-                      { label: 'Testing %',     value: readiness.testing_percentage, suffix: '%', color: '#4F46E5' },
-                      { label: 'Pass Rate',     value: readiness.pass_rate,         suffix: '%', color: '#10B981' },
-                      { label: 'Open Bugs',     value: readiness.open_bugs,         suffix: '',  color: '#EF4444' },
-                      { label: 'Critical Bugs', value: readiness.critical_bugs,     suffix: '',  color: '#7C3AED' },
-                    ].map(m => (
-                      <Grid item xs={6} sm={3} key={m.label}>
-                        <Box textAlign="center">
-                          <Typography variant="h4" fontWeight={800} color={m.color}>{m.value}{m.suffix}</Typography>
-                          <Typography variant="caption" color="text.secondary">{m.label}</Typography>
-                          {m.suffix === '%' && <LinearProgress variant="determinate" value={m.value as number} sx={{ mt: 1, height: 6, borderRadius: 3 }} />}
-                        </Box>
-                      </Grid>
-                    ))}
-                  </Grid>
-                </CardContent>
-              </Card>
-            </Grid>
-          )}
+          {REPORTS.map(report => {
+            const disabled = !!(report.needsRelease && !releaseId);
+            return (
+              <Grid item xs={12} md={6} key={report.id}>
+                <Card sx={{ height: '100%', border: disabled ? undefined : '1px solid transparent', '&:hover': disabled ? {} : { borderColor: 'primary.main', boxShadow: 4 } }}>
+                  <CardContent>
+                    <Box display="flex" alignItems="flex-start" gap={1.5} mb={1.5}>
+                      {report.icon}
+                      <Box flex={1}>
+                        <Typography variant="subtitle2" fontWeight={700}>{report.label}</Typography>
+                        <Typography variant="caption" color="text.secondary">{report.description}</Typography>
+                      </Box>
+                      {disabled && <Chip label="Select release" size="small" color="warning" sx={{ height: 20, fontSize: 10 }} />}
+                    </Box>
 
-          {/* Bug severity */}
-          <Grid item xs={12} md={4}>
-            <Card sx={{ height: 320 }}>
-              <CardContent sx={{ height: '100%' }}>
-                <Typography variant="subtitle1" fontWeight={700} mb={1}>Bug Severity Distribution</Typography>
-                {severityData.length === 0 ? (
-                  <Box display="flex" alignItems="center" justifyContent="center" height="80%">
-                    <Typography variant="body2" color="text.secondary">No open bugs 🎉</Typography>
-                  </Box>
-                ) : (
-                  <ResponsiveContainer width="100%" height="85%">
-                    <PieChart>
-                      <Pie data={severityData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={3} dataKey="value">
-                        {severityData.map(entry => (
-                          <Cell key={entry.name} fill={COLORS[entry.name.toLowerCase() as keyof typeof COLORS] ?? '#9CA3AF'} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend iconType="circle" iconSize={10} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
-              </CardContent>
-            </Card>
-          </Grid>
+                    <Divider sx={{ mb: 1.5 }} />
 
-          {/* Bug status */}
-          <Grid item xs={12} md={4}>
-            <Card sx={{ height: 320 }}>
-              <CardContent sx={{ height: '100%' }}>
-                <Typography variant="subtitle1" fontWeight={700} mb={1}>Bug Status Breakdown</Typography>
-                <ResponsiveContainer width="100%" height="85%">
-                  <BarChart data={statusData} layout="vertical" barSize={14}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,.1)" />
-                    <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
-                    <Tooltip />
-                    <Bar dataKey="value" radius={[0,4,4,0]}>
-                      {statusData.map(entry => (
-                        <Cell key={entry.name} fill={STATUS_COLORS[entry.name.replace(/ /g,'_')] ?? '#9CA3AF'} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Bug trend */}
-          <Grid item xs={12} md={4}>
-            <Card sx={{ height: 320 }}>
-              <CardContent sx={{ height: '100%' }}>
-                <Typography variant="subtitle1" fontWeight={700} mb={1}>Bug Trend (8 weeks)</Typography>
-                <ResponsiveContainer width="100%" height="85%">
-                  <AreaChart data={weekTrend}>
-                    <defs>
-                      <linearGradient id="bugGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#EF4444" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,.1)" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                    <Tooltip />
-                    <Area type="monotone" dataKey="bugs" stroke="#EF4444" strokeWidth={2} fill="url(#bugGrad)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
+                    <Box display="flex" gap={1} flexWrap="wrap">
+                      {report.formats.includes('csv') && (
+                        <Button
+                          size="small" variant="outlined" startIcon={isGenerating(`${report.id}-csv`) ? <CircularProgress size={14} /> : <TableViewIcon />}
+                          disabled={disabled || !!generating}
+                          onClick={() => generate(report.id, 'csv')}
+                        >
+                          CSV
+                        </Button>
+                      )}
+                      {report.formats.includes('excel') && (
+                        <Button
+                          size="small" variant="outlined" color="success"
+                          startIcon={isGenerating(`${report.id}-excel`) ? <CircularProgress size={14} /> : <DownloadIcon />}
+                          disabled={disabled || !!generating}
+                          onClick={() => generate(report.id, 'excel')}
+                        >
+                          Excel
+                        </Button>
+                      )}
+                      {report.formats.includes('pdf') && (
+                        <Button
+                          size="small" variant="outlined" color="error"
+                          startIcon={isGenerating(`${report.id}-pdf`) ? <CircularProgress size={14} /> : <PictureAsPdfIcon />}
+                          disabled={disabled || !!generating}
+                          onClick={() => generate(report.id, 'pdf')}
+                        >
+                          PDF / Print
+                        </Button>
+                      )}
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            );
+          })}
         </Grid>
       )}
+
+      {/* Export notes */}
+      <Box mt={4}>
+        <Typography variant="caption" color="text.secondary" display="block" mb={0.5} fontWeight={600}>Notes:</Typography>
+        <List dense sx={{ py: 0 }}>
+          {[
+            'CSV and Excel exports download instantly and contain live data.',
+            'PDF uses your browser\'s print dialog — choose "Save as PDF" as the destination.',
+            'Release-specific reports require a release to be selected above.',
+            'Executive Summary includes the top 50 open bugs in the print view.',
+          ].map((note, i) => (
+            <ListItem key={i} sx={{ py: 0 }}>
+              <ListItemIcon sx={{ minWidth: 20 }}><Typography variant="caption" color="text.secondary">•</Typography></ListItemIcon>
+              <ListItemText primary={<Typography variant="caption" color="text.secondary">{note}</Typography>} />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
     </Box>
   );
 }
