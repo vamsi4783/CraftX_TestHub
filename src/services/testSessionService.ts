@@ -28,7 +28,7 @@ export const testSessionService = {
         assignee:profiles!assigned_to(id,full_name,avatar_url),
         assigner:profiles!assigned_by(id,full_name),
         cases:test_session_cases(
-          *, test_case:test_cases(id,test_id,title,priority,estimated_minutes,module:modules(id,name))
+          *, test_case:test_cases(id,test_id,title,priority,estimated_minutes,steps:test_case_steps(*),module:modules(id,name))
         )
       `)
       .eq('id', id)

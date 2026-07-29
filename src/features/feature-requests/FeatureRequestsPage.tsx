@@ -15,6 +15,7 @@ import { StatusChip } from '@/components/common/StatusChip';
 import { SeverityChip } from '@/components/common/SeverityChip';
 import { EmptyState } from '@/components/common/EmptyState';
 import { useAuth } from '@/hooks/useAuth';
+import { toastError, toastSuccess } from '@/lib/errors';
 import { timeAgo } from '@/lib/utils';
 import type { FeaturePriority } from '@/types';
 
@@ -24,8 +25,12 @@ function CreateFRDialog({ open, onClose }: { open: boolean; onClose: () => void 
   const [form, setForm] = useState({ project_id: '', title: '', description: '', business_value: '', category: '', priority: 'medium' as FeaturePriority });
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: () => projectService.list() });
   const { mutate, isPending } = useMutation({
-    mutationFn: () => featureRequestService.create({ ...form, submitted_by: profile!.id }),
+    mutationFn: () => {
+      if (!profile) throw new Error('Not authenticated');
+      return featureRequestService.create({ ...form, submitted_by: profile.id });
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['feature-requests'] }); onClose(); setForm({ project_id:'',title:'',description:'',business_value:'',category:'',priority:'medium' }); },
+    onError: (err: unknown) => toastError(err),
   });
 
   return (

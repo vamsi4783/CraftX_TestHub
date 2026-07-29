@@ -273,6 +273,7 @@ export const analyticsService = {
   async exportTestResults(projectId: string) {
     const { data } = await supabase.from('test_results')
       .select('status,duration_minutes,executed_at,environment,notes,executor:profiles!executed_by(full_name),test_case:test_cases(test_id,title),assignment:test_assignments(release:releases(name,version))')
+      .eq('project_id', projectId)
       .order('executed_at', { ascending: false }).limit(1000);
     return (data ?? []).map((r: Record<string, unknown>) => ({
       'Test ID':    (r.test_case as { test_id: string } | null)?.test_id ?? '',

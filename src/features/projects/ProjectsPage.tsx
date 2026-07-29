@@ -40,19 +40,22 @@ function ProjectDialog({ open, onClose, existing }: { open: boolean; onClose: ()
   });
 
   const { mutate, isPending } = useMutation({
-    mutationFn: () => existing
-      ? projectService.update(existing.id, {
-          name: form.name, description: form.description || null,
-          platform: form.platform, version: form.version,
-          repository_url: form.repository_url || null, color: form.color,
-          tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
-        })
-      : projectService.create({
-          name: form.name, description: form.description || undefined,
-          platform: form.platform, owner_id: profile!.id, color: form.color,
-          version: form.version, repository_url: form.repository_url || undefined,
-          tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
-        }),
+    mutationFn: () => {
+      if (!profile) throw new Error('Not authenticated');
+      return existing
+        ? projectService.update(existing.id, {
+            name: form.name, description: form.description || null,
+            platform: form.platform, version: form.version,
+            repository_url: form.repository_url || null, color: form.color,
+            tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
+          })
+        : projectService.create({
+            name: form.name, description: form.description || undefined,
+            platform: form.platform, owner_id: profile.id, color: form.color,
+            version: form.version, repository_url: form.repository_url || undefined,
+            tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
+          });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['projects'] });
       toastSuccess(existing ? 'Project updated' : 'Project created');

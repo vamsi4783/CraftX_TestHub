@@ -56,7 +56,7 @@ function AutoBugDialog({
   session, sessionCase, stepNumber, stepResult,
 }: {
   open: boolean; onClose: () => void; onCreated: (bug: Bug) => void;
-  session: { project_id: string; release_id?: string | null };
+  session: { id: string; project_id: string; release_id?: string | null; plan_id?: string | null };
   sessionCase: TestSessionCase;
   stepNumber: number;
   stepResult: StepState;
@@ -73,6 +73,8 @@ function AutoBugDialog({
       project_id: session.project_id,
       release_id: session.release_id ?? undefined,
       test_case_id: sessionCase.test_case_id,
+      test_session_id: session.id,
+      test_plan_id: session.plan_id ?? undefined,
       title, description, severity,
       priority: 'p2', status: 'new',
       environment: 'QA',
@@ -126,6 +128,7 @@ export function TestSessionExecutionPage() {
   const [caseIndex, setCaseIndex] = useState(0);
   const [executionId, setExecutionId] = useState<string | null>(null);
   const [stepStates, setStepStates] = useState<Record<number, StepState>>({});
+  const [stepResultIds, setStepResultIds] = useState<Record<number, string>>({});
   const [currentStepIdx, setCurrentStepIdx] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -141,6 +144,14 @@ export function TestSessionExecutionPage() {
   });
 
   const cases = session?.cases ?? [];
+
+  // Auto-advance to first pending case on session load/resume
+  useEffect(() => {
+    if (!session?.cases?.length) return;
+    const firstPending = session.cases.findIndex(c => !['pass', 'fail', 'blocked', 'skipped'].includes(c.status));
+    if (firstPending > 0) setCaseIndex(firstPending);
+  }, [session?.id]);
+
   const currentCase = cases[caseIndex] ?? null;
   const steps: TestCaseStep[] = (currentCase?.test_case?.steps ?? []).sort((a, b) => a.step_number - b.step_number);
   const currentStep = steps[currentStepIdx] ?? null;
@@ -149,6 +160,7 @@ export function TestSessionExecutionPage() {
   useEffect(() => {
     if (!currentCase || !session || !profile) return;
     setStepStates({});
+    setStepResultIds({});
     setCurrentStepIdx(0);
     setExecutionId(null);
 
@@ -160,10 +172,13 @@ export function TestSessionExecutionPage() {
         // Load saved step results
         const results = await executionService.getStepResults(existing.id).catch(() => []);
         const states: Record<number, StepState> = {};
+        const resultIds: Record<number, string> = {};
         results.forEach(r => {
           states[r.step_number] = { status: r.status as StepResultStatus, actual_result: r.actual_result ?? '', notes: r.notes ?? '', bug_id: r.bug_id ?? undefined };
+          resultIds[r.step_number] = r.id;
         });
         setStepStates(states);
+        setStepResultIds(resultIds);
         // Resume at last incomplete step
         const lastDone = results.filter(r => r.status !== 'not_tested').length;
         setCurrentStepIdx(Math.min(lastDone, steps.length - 1));
@@ -213,12 +228,12 @@ export function TestSessionExecutionPage() {
     });
   };
 
-  const saveCurrentStep = async () => {
-    if (!executionId || !currentStep) return;
+  const saveCurrentStep = async (): Promise<string | null> => {
+    if (!executionId || !currentStep) return null;
     const state = stepStates[currentStep.step_number] ?? { status: 'not_tested' as StepResultStatus, actual_result: '', notes: '' };
     setSaving(true);
     try {
-      await executionService.saveStepResult({
+      const result = await executionService.saveStepResult({
         execution_id: executionId,
         step_id: currentStep.id,
         step_number: currentStep.step_number,
@@ -228,10 +243,13 @@ export function TestSessionExecutionPage() {
         actual_result: state.actual_result,
         notes: state.notes,
       });
+      setStepResultIds(prev => ({ ...prev, [currentStep.step_number]: result.id }));
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+      return result.id;
     } catch (e) {
       toastError(e);
+      return null;
     } finally {
       setSaving(false);
     }
@@ -548,7 +566,12 @@ export function TestSessionExecutionPage() {
           onClose={() => { setBugDialogOpen(false); setBugForStep(null); if (currentStepIdx < steps.length - 1) setCurrentStepIdx(i => i + 1); }}
           onCreated={(bug) => {
             if (bugForStep !== null) {
-              // Could link bug to step result here — omit for now since we need step result ID
+              const stepResultId = stepResultIds[bugForStep];
+              if (stepResultId) {
+                executionService.linkBugToStep(stepResultId, bug.id).catch(() => null);
+                setStepResultIds(prev => ({ ...prev })); // trigger re-render
+                setStep(bugForStep, { bug_id: bug.id });
+              }
             }
             if (currentStepIdx < steps.length - 1) setCurrentStepIdx(i => i + 1);
           }}

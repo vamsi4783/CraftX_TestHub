@@ -50,8 +50,11 @@ export const userService = {
     if (error) throw error;
   },
 
-  async inviteByEmail(email: string): Promise<void> {
-    const { error } = await supabase.auth.admin.inviteUserByEmail(email);
-    if (error) throw error;
+  // TODO (v1.1): Move to a Supabase Edge Function using the service_role key.
+  // auth.admin.inviteUserByEmail requires the Admin API — calling it from the browser
+  // with the anon key always returns 403. Team invite is not on the v1.0 critical path;
+  // new users can sign up directly and be assigned a role via the Users page.
+  async inviteByEmail(_email: string): Promise<void> {
+    throw new Error('Team invite via email is coming in v1.1. Ask users to sign up directly at the app URL and assign their role from the Users page.');
   },
 };

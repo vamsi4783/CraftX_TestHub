@@ -18,6 +18,7 @@ import { StatusChip } from '@/components/common/StatusChip';
 import { SeverityChip } from '@/components/common/SeverityChip';
 import { EmptyState } from '@/components/common/EmptyState';
 import { useAuth } from '@/hooks/useAuth';
+import { toastError } from '@/lib/errors';
 import type { TcPriority, TcStatus } from '@/types';
 
 function CreateTestCaseDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -28,8 +29,12 @@ function CreateTestCaseDialog({ open, onClose }: { open: boolean; onClose: () =>
   const { data: modules = [] } = useQuery({ queryKey: ['modules', form.project_id], queryFn: () => moduleService.list(form.project_id), enabled: !!form.project_id });
 
   const { mutate, isPending } = useMutation({
-    mutationFn: () => testCaseService.create({ ...form, module_id: form.module_id || undefined, created_by: profile!.id, status: 'draft' }),
+    mutationFn: () => {
+      if (!profile) throw new Error('Not authenticated');
+      return testCaseService.create({ ...form, module_id: form.module_id || undefined, created_by: profile.id, status: 'draft' });
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['test-cases'] }); onClose(); setForm({ project_id:'',module_id:'',title:'',description:'',priority:'medium',estimated_minutes:15,preconditions:'' }); },
+    onError: err => toastError(err),
   });
 
   return (
@@ -70,7 +75,7 @@ function CreateTestCaseDialog({ open, onClose }: { open: boolean; onClose: () =>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={() => mutate()} disabled={!form.project_id || !form.title || isPending}>
+        <Button variant="contained" onClick={() => mutate()} disabled={!form.project_id || !form.title || isPending || !profile}>
           {isPending ? <CircularProgress size={18} color="inherit" /> : 'Create'}
         </Button>
       </DialogActions>

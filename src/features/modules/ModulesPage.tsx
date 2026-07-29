@@ -27,9 +27,12 @@ function ModuleDialog({ open, onClose, projectId, existing }: {
   const [desc, setDesc] = useState(existing?.description ?? '');
 
   const { mutate, isPending } = useMutation({
-    mutationFn: () => existing
-      ? moduleService.update(existing.id, { name, description: desc || null })
-      : moduleService.create({ project_id: projectId, name, description: desc || undefined, created_by: profile!.id }),
+    mutationFn: () => {
+      if (!profile) throw new Error('Not authenticated');
+      return existing
+        ? moduleService.update(existing.id, { name, description: desc || null })
+        : moduleService.create({ project_id: projectId, name, description: desc || undefined, created_by: profile.id });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['modules'] });
       toastSuccess(existing ? 'Module updated' : 'Module created');

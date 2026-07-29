@@ -56,7 +56,9 @@ function CreateBugDialog({ open, onClose }: { open: boolean; onClose: () => void
   const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: userService.list });
 
   const { mutate, isPending } = useMutation({
-    mutationFn: () => bugService.create({
+    mutationFn: () => {
+      if (!profile) throw new Error('Not authenticated');
+      return bugService.create({
       project_id: form.project_id, release_id: form.release_id || null,
       module_id: form.module_id || null, title: form.title, description: form.description,
       severity: form.severity, priority: form.priority, environment: form.environment,
@@ -64,10 +66,11 @@ function CreateBugDialog({ open, onClose }: { open: boolean; onClose: () => void
       app_version: form.app_version || null, build_number: form.build_number || null,
       steps_to_reproduce: form.steps_to_reproduce || null,
       expected_result: form.expected_result || null, actual_result: form.actual_result || null,
-      assigned_to: form.assigned_to || null, reported_by: profile!.id,
+      assigned_to: form.assigned_to || null, reported_by: profile.id,
       status: 'new', is_regression: form.is_regression,
       tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
-    }),
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['bugs'] });
       toastSuccess('Bug reported');

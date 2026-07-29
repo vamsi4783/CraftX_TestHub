@@ -32,7 +32,7 @@ export function Header({ onMenuClick }: Props) {
   // Load unread count + subscribe to realtime notifications
   useEffect(() => {
     if (!profile?.id) return;
-    notificationService.getUnreadCount(profile.id).then(setUnreadCount);
+    notificationService.getUnreadCount(profile.id).then(setUnreadCount).catch(() => {});
     const channel = notificationService.subscribeToUser(profile.id, (n: Notification) => {
       setUnreadCount(c => c + 1);
       toast.info(n.title);
