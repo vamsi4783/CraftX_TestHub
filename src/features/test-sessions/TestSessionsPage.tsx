@@ -50,6 +50,15 @@ function CreateSessionDialog({ open, onClose, projectId }: { open: boolean; onCl
   });
   const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: () => userService.list() });
 
+  // Fetch case count for the selected plan to validate before creating session
+  const { data: planCases = [] } = useQuery({
+    queryKey: ['plan-cases', planId],
+    queryFn: () => testPlanService.getCases(planId),
+    enabled: !!planId,
+  });
+
+  const planHasNoCases = !!planId && planCases.length === 0;
+
   const mutation = useMutation({
     mutationFn: async () => {
       const session = await testSessionService.create({
@@ -85,12 +94,17 @@ function CreateSessionDialog({ open, onClose, projectId }: { open: boolean; onCl
             {testers.map(u => <MenuItem key={u.id} value={u.id}>{u.full_name ?? u.email}</MenuItem>)}
           </Select>
         </FormControl>
-        <FormControl fullWidth>
+        <FormControl fullWidth error={planHasNoCases}>
           <InputLabel>Test Plan (optional)</InputLabel>
           <Select label="Test Plan (optional)" value={planId} onChange={e => setPlanId(e.target.value)}>
             <MenuItem value="">— None —</MenuItem>
             {plans.map(p => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
           </Select>
+          {planHasNoCases && (
+            <Typography variant="caption" color="error" mt={0.5}>
+              This test plan contains no test cases. Add at least one test case before creating a session.
+            </Typography>
+          )}
         </FormControl>
         <FormControl fullWidth>
           <InputLabel>Release</InputLabel>
@@ -103,15 +117,15 @@ function CreateSessionDialog({ open, onClose, projectId }: { open: boolean; onCl
           <TextField label="Start Date" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} />
           <TextField label="End Date" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} />
         </Stack>
-        {planId && (
+        {planId && !planHasNoCases && (
           <Typography variant="caption" color="text.secondary">
-            Test cases from the selected plan will be automatically added to this session.
+            {planCases.length} test case{planCases.length !== 1 ? 's' : ''} from this plan will be automatically added to the session.
           </Typography>
         )}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" disabled={!name.trim() || !assignedTo || mutation.isPending} onClick={() => mutation.mutate()}>
+        <Button variant="contained" disabled={!name.trim() || !assignedTo || planHasNoCases || mutation.isPending} onClick={() => mutation.mutate()}>
           {mutation.isPending ? 'Creating…' : 'Create Session'}
         </Button>
       </DialogActions>

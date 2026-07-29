@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Box, Tabs, Tab, Grid, Card, CardContent, Typography, Button, Chip, LinearProgress, CircularProgress, Avatar } from '@mui/material';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Box, Tabs, Tab, Grid, Card, CardContent, Typography, Button, Chip, LinearProgress, CircularProgress, Avatar, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Select, InputLabel, FormControl } from '@mui/material';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import AssignmentIcon from '@mui/icons-material/Assignment';
@@ -15,6 +15,7 @@ import { LoadingState } from '@/components/common/LoadingState';
 import { StatusChip } from '@/components/common/StatusChip';
 import { SeverityChip } from '@/components/common/SeverityChip';
 import { PLATFORM_ICONS, PLATFORM_LABELS, formatDate } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
 
 function StatBadge({ label, value, color }: { label: string; value: number; color?: string }) {
   return (
@@ -29,6 +30,11 @@ export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [releaseDialogOpen, setReleaseDialogOpen] = useState(false);
+  const [releaseSaving, setReleaseSaving] = useState(false);
+  const [releaseForm, setReleaseForm] = useState({ name: '', version: '', build_number: '', status: 'planning', description: '', start_date: '', end_date: '' });
 
   const { data: project, isLoading } = useQuery({
     queryKey: ['project', id],
@@ -55,6 +61,28 @@ export function ProjectDetailPage() {
   });
 
   if (isLoading || !project) return <LoadingState />;
+
+  async function handleCreateRelease() {
+    if (!releaseForm.name || !releaseForm.version) return;
+    setReleaseSaving(true);
+    try {
+      await releaseService.create({
+        project_id: id!,
+        name: releaseForm.name,
+        version: releaseForm.version,
+        build_number: releaseForm.build_number || undefined,
+        description: releaseForm.description || undefined,
+        start_date: releaseForm.start_date || undefined,
+        end_date: releaseForm.end_date || undefined,
+        created_by: user!.id,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['releases', id] });
+      setReleaseDialogOpen(false);
+      setReleaseForm({ name: '', version: '', build_number: '', status: 'planning', description: '', start_date: '', end_date: '' });
+    } finally {
+      setReleaseSaving(false);
+    }
+  }
 
   const openBugs = bugs.filter(b => !['closed','rejected','duplicate'].includes(b.status));
   const criticalBugs = openBugs.filter(b => b.severity === 'critical');
@@ -130,7 +158,7 @@ export function ProjectDetailPage() {
       {tab === 0 && (
         <Box>
           <Box display="flex" justifyContent="flex-end" mb={2}>
-            <Button variant="contained" size="small" startIcon={<RocketLaunchIcon />} onClick={() => navigate(`/projects/${id}/releases/new`)}>
+            <Button variant="contained" size="small" startIcon={<RocketLaunchIcon />} onClick={() => setReleaseDialogOpen(true)}>
               New Release
             </Button>
           </Box>
@@ -207,6 +235,29 @@ export function ProjectDetailPage() {
           ))}
         </Grid>
       )}
+
+      {/* New Release dialog */}
+      <Dialog open={releaseDialogOpen} onClose={() => setReleaseDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>New Release</DialogTitle>
+        <DialogContent>
+          <Box display="flex" flexDirection="column" gap={2} pt={1}>
+            <TextField label="Release Name *" value={releaseForm.name} onChange={e => setReleaseForm(f => ({ ...f, name: e.target.value }))} fullWidth size="small" placeholder="e.g. Release Candidate 2" />
+            <TextField label="Version *" value={releaseForm.version} onChange={e => setReleaseForm(f => ({ ...f, version: e.target.value }))} fullWidth size="small" placeholder="e.g. 2.1.0" />
+            <TextField label="Build Number" value={releaseForm.build_number} onChange={e => setReleaseForm(f => ({ ...f, build_number: e.target.value }))} fullWidth size="small" placeholder="e.g. 200101" />
+            <TextField label="Description" value={releaseForm.description} onChange={e => setReleaseForm(f => ({ ...f, description: e.target.value }))} fullWidth size="small" multiline rows={2} />
+            <Box display="flex" gap={2}>
+              <TextField label="Start Date" type="date" value={releaseForm.start_date} onChange={e => setReleaseForm(f => ({ ...f, start_date: e.target.value }))} fullWidth size="small" InputLabelProps={{ shrink: true }} />
+              <TextField label="End Date" type="date" value={releaseForm.end_date} onChange={e => setReleaseForm(f => ({ ...f, end_date: e.target.value }))} fullWidth size="small" InputLabelProps={{ shrink: true }} />
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReleaseDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleCreateRelease} disabled={!releaseForm.name || !releaseForm.version || releaseSaving}>
+            {releaseSaving ? 'Creating…' : 'Create Release'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

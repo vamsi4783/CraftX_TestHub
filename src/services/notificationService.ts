@@ -36,11 +36,15 @@ export const notificationService = {
   },
 
   subscribeToUser(userId: string, onNew: (n: Notification) => void) {
-    return supabase.channel(`notifications:${userId}`)
+    const channelName = `notifications:${userId}:${Date.now()}`;
+    const channel = supabase.channel(channelName)
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'notifications',
         filter: `user_id=eq.${userId}`,
       }, payload => onNew(payload.new as Notification))
       .subscribe();
+    return {
+      unsubscribe: () => supabase.removeChannel(channel),
+    };
   },
 };

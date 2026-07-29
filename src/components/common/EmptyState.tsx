@@ -1,3 +1,4 @@
+import React from 'react';
 import { Box, Typography, Button } from '@mui/material';
 import type { SvgIconComponent } from '@mui/icons-material';
 import type { ReactNode } from 'react';
@@ -12,9 +13,11 @@ interface Props {
 }
 
 export function EmptyState({ icon, title, description, actionLabel, onAction, action }: Props) {
-  const iconNode = typeof icon === 'function'
-    ? (() => { const Icon = icon as SvgIconComponent; return <Icon sx={{ fontSize: 56, color: 'text.disabled', mb: 1 }} />; })()
-    : icon;
+  const iconNode = !icon
+    ? null
+    : React.isValidElement(icon)
+      ? icon
+      : (() => { const Icon = icon as SvgIconComponent; return <Icon sx={{ fontSize: 56, color: 'text.disabled', mb: 1 }} />; })();
   return (
     <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" py={10} gap={2} textAlign="center">
       {iconNode}

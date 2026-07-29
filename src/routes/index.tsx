@@ -14,6 +14,7 @@ import { ReleaseDetailPage } from '@/features/releases/ReleaseDetailPage';
 import { TestCasesPage } from '@/features/test-cases/TestCasesPage';
 import { TestExecutionPage } from '@/features/test-cases/TestExecutionPage';
 import { TestPlansPage } from '@/features/test-plans/TestPlansPage';
+import { TestPlanDetailPage } from '@/features/test-plans/TestPlanDetailPage';
 import { TestSessionsPage } from '@/features/test-sessions/TestSessionsPage';
 import { TestSessionDetailPage } from '@/features/test-sessions/TestSessionDetailPage';
 import { TestSessionExecutionPage } from '@/features/test-sessions/TestSessionExecutionPage';
@@ -154,6 +155,7 @@ export const router = createBrowserRouter([
       { path: 'my-tests',                      element: <P><MyTestsPage /></P> },
       { path: 'test-execution/:id',            element: <P><TestExecutionPage /></P> },
       { path: 'test-plans',                    element: <P><TestPlansPage /></P> },
+      { path: 'test-plans/:id',               element: <P><TestPlanDetailPage /></P> },
       { path: 'test-sessions',                 element: <P><TestSessionsPage /></P> },
       { path: 'test-sessions/new',             element: <P><TestSessionsPage /></P> },
       { path: 'test-sessions/:id',             element: <P><TestSessionDetailPage /></P> },
