@@ -4,7 +4,6 @@ export type ProjectPlatform = 'android' | 'ios' | 'web' | 'desktop' | 'backend' 
 export type ReleaseStatus = 'planning' | 'testing' | 'ready' | 'released' | 'archived';
 export type TcPriority = 'critical' | 'high' | 'medium' | 'low';
 export type TcStatus = 'draft' | 'active' | 'deprecated';
-export type TcExecutionMode = 'quick' | 'detailed';
 export type AssignmentStatus = 'pending' | 'in_progress' | 'completed';
 export type ResultStatus = 'pass' | 'fail' | 'blocked' | 'skipped' | 'not_tested';
 export type BugSeverity = 'critical' | 'high' | 'medium' | 'low';
@@ -119,7 +118,6 @@ export interface TestCase {
   description: string | null;
   priority: TcPriority;
   status: TcStatus;
-  execution_mode: TcExecutionMode;
   estimated_minutes: number;
   is_automation_ready: boolean;
   preconditions: string | null;

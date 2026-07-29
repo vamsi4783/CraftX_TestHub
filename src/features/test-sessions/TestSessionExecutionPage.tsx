@@ -307,9 +307,7 @@ export function TestSessionExecutionPage() {
     );
   }
 
-  const executionMode = currentCase?.test_case?.execution_mode ?? 'quick';
-  const isQuickMode = executionMode === 'quick';
-  const isDetailedNoSteps = executionMode === 'detailed' && steps.length === 0;
+  const isQuickMode = steps.length === 0;
 
   const stepStatesArr = steps.map(s => stepStates[s.step_number] ?? { status: 'not_tested' as StepResultStatus, actual_result: '', notes: '' });
   const doneSteps = stepStatesArr.filter(s => s.status !== 'not_tested').length;
@@ -319,13 +317,6 @@ export function TestSessionExecutionPage() {
 
   const sessionDone = cases.filter(c => ['pass','fail','blocked','skipped'].includes(c.status)).length;
   const sessionProgress = cases.length > 0 ? (sessionDone / cases.length) * 100 : 0;
-
-  const QUICK_RESULT_OPTIONS: { status: StepResultStatus; label: string; color: string; icon: React.ReactNode }[] = [
-    { status: 'pass',    label: 'PASS',    color: '#10B981', icon: <CheckCircleIcon /> },
-    { status: 'fail',    label: 'FAIL',    color: '#EF4444', icon: <CancelIcon /> },
-    { status: 'blocked', label: 'BLOCKED', color: '#F59E0B', icon: <BlockIcon /> },
-    { status: 'skipped', label: 'SKIP',    color: '#6B7280', icon: <SkipNextIcon /> },
-  ];
 
   return (
     <Box maxWidth={960} mx="auto">
@@ -392,7 +383,6 @@ export function TestSessionExecutionPage() {
                 </Typography>
                 <Box display="flex" gap={1} flexWrap="wrap" mb={1.5}>
                   <Chip label={(currentCase?.test_case?.priority ?? 'medium').toUpperCase()} size="small" />
-                  <Chip label="⚡ Quick" size="small" variant="outlined" color="default" />
                   {currentCase?.test_case?.module && (
                     <Chip label={currentCase.test_case.module.name} size="small" variant="outlined" />
                   )}
@@ -425,7 +415,7 @@ export function TestSessionExecutionPage() {
 
                 <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={1}>RESULT *</Typography>
                 <Box display="flex" gap={1} flexWrap="wrap" mb={2}>
-                  {QUICK_RESULT_OPTIONS.map(opt => (
+                  {RESULT_OPTIONS.filter(o => o.status !== 'not_tested').map(opt => (
                     <Button
                       key={opt.status}
                       variant="outlined"
@@ -458,34 +448,8 @@ export function TestSessionExecutionPage() {
         </Grid>
       )}
 
-      {/* ── DETAILED MODE — NO STEPS ── */}
-      {isDetailedNoSteps && (
-        <Card>
-          <CardContent>
-            <Alert severity="error" sx={{ mb: 2 }}>
-              <Typography variant="body2" fontWeight={600} mb={0.5}>Execution blocked</Typography>
-              <Typography variant="body2">
-                This test case is configured for <strong>Detailed (step-by-step) execution</strong> but has no steps defined.
-                Add steps to the test case before running it, or change its execution mode to Quick.
-              </Typography>
-            </Alert>
-            <Box display="flex" gap={1} justifyContent="flex-end">
-              <Button variant="outlined" onClick={() => completeCase('blocked')} disabled={saving}>
-                Mark BLOCKED
-              </Button>
-              <Button variant="outlined" onClick={() => {
-                if (caseIndex < cases.length - 1) setCaseIndex(i => i + 1);
-                else navigate(`/test-sessions/${id}`);
-              }}>
-                Skip Case
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── DETAILED MODE — WITH STEPS ── */}
-      {!isQuickMode && !isDetailedNoSteps && (
+      {/* ── GUIDED MODE — WITH STEPS ── */}
+      {!isQuickMode && (
         <Grid container spacing={2}>
           {/* Left: Test Case Info + Steps sidebar */}
           <Grid item xs={12} md={4}>
@@ -500,7 +464,6 @@ export function TestSessionExecutionPage() {
                 </Typography>
                 <Box display="flex" gap={1} mt={1} flexWrap="wrap">
                   <Chip label={currentCase?.test_case?.priority ?? '—'} size="small" />
-                  <Chip label="📋 Detailed" size="small" variant="outlined" color="info" />
                   {currentCase?.test_case?.module && (
                     <Chip label={currentCase.test_case.module.name} size="small" variant="outlined" />
                   )}
