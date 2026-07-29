@@ -82,6 +82,7 @@ export function TestExecutionPage() {
         title="Test Execution"
         subtitle={`${tc.test_id} · ${assignment.release?.name}`}
         breadcrumbs={[{ label: 'My Tests', to: '/my-tests' }, { label: 'Execute' }]}
+      showBack
       />
 
       {/* Test case header */}

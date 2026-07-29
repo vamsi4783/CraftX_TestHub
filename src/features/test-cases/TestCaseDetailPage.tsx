@@ -22,7 +22,7 @@ import { testCaseService } from '@/services/testCaseService';
 import { moduleService } from '@/services/moduleService';
 import { toastSuccess, toastError } from '@/lib/errors';
 import { useAuth } from '@/hooks/useAuth';
-import type { TcPriority, TcStatus, TestCaseStep } from '@/types';
+import type { TcPriority, TcStatus, TcExecutionMode, TestCaseStep } from '@/types';
 
 const PRIORITY_COLOR: Record<TcPriority, 'error' | 'warning' | 'info' | 'success'> = {
   critical: 'error', high: 'warning', medium: 'info', low: 'success',
@@ -43,6 +43,7 @@ function EditTestCaseDialog({ open, onClose, tc }: {
     priority: tc.priority,
     status: tc.status,
     estimated_minutes: tc.estimated_minutes,
+    execution_mode: (tc.execution_mode ?? 'quick') as TcExecutionMode,
   });
 
   const { data: modules = [] } = useQuery({
@@ -61,6 +62,7 @@ function EditTestCaseDialog({ open, onClose, tc }: {
       status: form.status,
       estimated_minutes: form.estimated_minutes,
       module_id: moduleId || null,
+      execution_mode: form.execution_mode,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['test-case', tc.id] });
@@ -103,6 +105,15 @@ function EditTestCaseDialog({ open, onClose, tc }: {
             <Grid item xs={6}>
               <TextField label="Est. Minutes" type="number" value={form.estimated_minutes}
                 onChange={e => setForm(f => ({ ...f, estimated_minutes: +e.target.value }))} fullWidth />
+            </Grid>
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>Execution Mode</InputLabel>
+                <Select label="Execution Mode" value={form.execution_mode} onChange={e => setForm(f => ({ ...f, execution_mode: e.target.value as TcExecutionMode }))}>
+                  <MenuItem value="quick">⚡ Quick — direct Pass/Fail, no steps required</MenuItem>
+                  <MenuItem value="detailed">📋 Detailed — step-by-step execution</MenuItem>
+                </Select>
+              </FormControl>
             </Grid>
           </Grid>
           <TextField label="Description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} fullWidth multiline rows={2} />
@@ -236,6 +247,7 @@ export function TestCaseDetailPage() {
           { label: 'Test Cases', to: '/test-cases' },
           { label: tc.test_id },
         ]}
+        showBack
         actions={
           canManage ? (
             <Stack direction="row" spacing={1}>
@@ -275,6 +287,15 @@ export function TestCaseDetailPage() {
                     <AccessTimeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                     <Typography variant="caption">{estLabel}</Typography>
                   </Box>
+                </Box>
+                <Box display="flex" justifyContent="space-between" alignItems="center">
+                  <Typography variant="caption" color="text.secondary">Execution Mode</Typography>
+                  <Chip
+                    label={(tc.execution_mode ?? 'quick') === 'quick' ? '⚡ Quick' : '📋 Detailed'}
+                    size="small"
+                    color={(tc.execution_mode ?? 'quick') === 'quick' ? 'default' : 'info'}
+                    variant="outlined"
+                  />
                 </Box>
                 <Box display="flex" justifyContent="space-between" alignItems="center">
                   <Typography variant="caption" color="text.secondary">Automation</Typography>

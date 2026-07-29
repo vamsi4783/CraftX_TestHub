@@ -7,7 +7,7 @@ export const testCaseService = {
       .from('test_cases')
       .select(`*, module:modules(id,name), creator:profiles!created_by(id,full_name)`)
       .eq('project_id', projectId)
-      .order('created_at', { ascending: false });
+      .order('test_id', { ascending: true });
 
     if (filters?.module_id) q = q.eq('module_id', filters.module_id);
     if (filters?.status)    q = q.eq('status', filters.status);

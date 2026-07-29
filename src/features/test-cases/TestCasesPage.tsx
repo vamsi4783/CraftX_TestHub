@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
@@ -24,16 +24,16 @@ import type { TcPriority, TcStatus } from '@/types';
 function CreateTestCaseDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { profile } = useAuth();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ project_id: '', module_id: '', title: '', description: '', priority: 'medium' as TcPriority, estimated_minutes: 15, preconditions: '' });
+  const [form, setForm] = useState({ project_id: '', module_id: '', title: '', description: '', priority: 'medium' as TcPriority, estimated_minutes: 15, preconditions: '', tags: '', execution_mode: 'quick' as 'quick' | 'detailed' });
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: () => projectService.list() });
   const { data: modules = [] } = useQuery({ queryKey: ['modules', form.project_id], queryFn: () => moduleService.list(form.project_id), enabled: !!form.project_id });
 
   const { mutate, isPending } = useMutation({
     mutationFn: () => {
       if (!profile) throw new Error('Not authenticated');
-      return testCaseService.create({ ...form, module_id: form.module_id || undefined, created_by: profile.id, status: 'draft' });
+      return testCaseService.create({ ...form, module_id: form.module_id || undefined, created_by: profile.id, status: 'draft', tags: form.tags.split(',').map(t => t.trim()).filter(Boolean), execution_mode: form.execution_mode });
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['test-cases'] }); onClose(); setForm({ project_id:'',module_id:'',title:'',description:'',priority:'medium',estimated_minutes:15,preconditions:'' }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['test-cases'] }); onClose(); setForm({ project_id:'',module_id:'',title:'',description:'',priority:'medium',estimated_minutes:15,preconditions:'',tags:'',execution_mode:'quick' }); },
     onError: err => toastError(err),
   });
 
@@ -70,7 +70,17 @@ function CreateTestCaseDialog({ open, onClose }: { open: boolean; onClose: () =>
             </FormControl>
           </Grid>
           <Grid item xs={6}><TextField label="Est. Minutes" type="number" value={form.estimated_minutes} onChange={e => setForm(f => ({ ...f, estimated_minutes: +e.target.value }))} fullWidth /></Grid>
+          <Grid item xs={12}>
+            <FormControl fullWidth>
+              <InputLabel>Execution Mode</InputLabel>
+              <Select label="Execution Mode" value={form.execution_mode} onChange={e => setForm(f => ({ ...f, execution_mode: e.target.value as 'quick' | 'detailed' }))}>
+                <MenuItem value="quick">⚡ Quick — direct Pass/Fail, no steps required</MenuItem>
+                <MenuItem value="detailed">📋 Detailed — step-by-step execution</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
           <Grid item xs={12}><TextField label="Preconditions" value={form.preconditions} onChange={e => setForm(f => ({ ...f, preconditions: e.target.value }))} fullWidth multiline rows={2} /></Grid>
+          <Grid item xs={12}><TextField label="Tags (comma separated)" placeholder="e.g. smoke, login, critical-path" value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} fullWidth /></Grid>
         </Grid>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -86,7 +96,9 @@ function CreateTestCaseDialog({ open, onClose }: { open: boolean; onClose: () =>
 export function TestCasesPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
-  const [filterProject, setFilterProject] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filterProject = searchParams.get('project') ?? '';
+  const setFilterProject = (id: string) => setSearchParams(prev => { const p = new URLSearchParams(prev); id ? p.set('project', id) : p.delete('project'); return p; }, { replace: true });
   const [filterStatus, setFilterStatus] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
 

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Card, CardContent, Typography, Button, IconButton, Chip,
@@ -63,7 +64,9 @@ function ModuleDialog({ open, onClose, projectId, existing }: {
 export function ModulesPage() {
   const { isAdmin } = useAuth();
   const qc = useQueryClient();
-  const [projectId, setProjectId] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const projectId = searchParams.get('project') ?? '';
+  const setProjectId = (id: string) => setSearchParams(id ? { project: id } : {}, { replace: true });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Module | undefined>();
   const [deleting, setDeleting] = useState<Module | undefined>();

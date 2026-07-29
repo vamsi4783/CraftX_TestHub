@@ -42,7 +42,7 @@ export const testSessionService = {
   async create(input: {
     project_id: string; name: string; assigned_to: string; assigned_by: string;
     plan_id?: string; release_id?: string; description?: string;
-    start_date?: string; end_date?: string;
+    start_date?: string; end_date?: string; status?: string;
   }): Promise<TestSession> {
     const { data, error } = await supabase.from('test_sessions').insert(input).select().single();
     if (error) throw error;

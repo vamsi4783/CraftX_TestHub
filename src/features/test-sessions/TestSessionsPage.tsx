@@ -41,6 +41,7 @@ function CreateSessionDialog({ open, onClose, projectId }: { open: boolean; onCl
   const [planId, setPlanId] = useState(searchParams.get('plan') ?? '');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [status, setStatus] = useState<TestSessionStatus>('pending');
 
   const { data: releases = [] } = useQuery({
     queryKey: ['releases', projectId], queryFn: () => releaseService.list(projectId), enabled: !!projectId,
@@ -66,6 +67,7 @@ function CreateSessionDialog({ open, onClose, projectId }: { open: boolean; onCl
         assigned_to: assignedTo, assigned_by: profile!.id,
         plan_id: planId || undefined, release_id: releaseId || undefined,
         start_date: startDate || undefined, end_date: endDate || undefined,
+        status,
       });
       if (planId) {
         await testSessionService.addCasesFromPlan(session.id, planId);
@@ -117,6 +119,14 @@ function CreateSessionDialog({ open, onClose, projectId }: { open: boolean; onCl
           <TextField label="Start Date" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} />
           <TextField label="End Date" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} />
         </Stack>
+        <FormControl fullWidth>
+          <InputLabel>Status</InputLabel>
+          <Select label="Status" value={status} onChange={e => setStatus(e.target.value as TestSessionStatus)}>
+            {(['pending', 'in_progress', 'paused', 'completed', 'cancelled'] as TestSessionStatus[]).map(s => (
+              <MenuItem key={s} value={s} sx={{ textTransform: 'capitalize' }}>{s.replace(/_/g, ' ')}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
         {planId && !planHasNoCases && (
           <Typography variant="caption" color="text.secondary">
             {planCases.length} test case{planCases.length !== 1 ? 's' : ''} from this plan will be automatically added to the session.
@@ -137,7 +147,9 @@ export function TestSessionsPage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const qc = useQueryClient();
-  const [selectedProject, setSelectedProject] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedProject = searchParams.get('project') ?? '';
+  const setSelectedProject = (id: string) => setSearchParams(prev => { const p = new URLSearchParams(prev); id ? p.set('project', id) : p.delete('project'); return p; }, { replace: true });
   const [filterStatus, setFilterStatus] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteSession, setDeleteSession] = useState<TestSession | null>(null);

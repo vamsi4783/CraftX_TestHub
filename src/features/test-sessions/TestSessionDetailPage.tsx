@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Card, CardContent, Typography, Button, Chip, Avatar, Grid, Divider,
   Table, TableBody, TableCell, TableHead, TableRow, LinearProgress, Stack,
-  IconButton, Tooltip, Alert,
+  IconButton, Tooltip, Alert, FormControl, Select, MenuItem,
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
@@ -83,6 +83,16 @@ export function TestSessionDetailPage() {
     onError: e => toastError(e),
   });
 
+  const statusMutation = useMutation({
+    mutationFn: (status: TestSessionStatus) => testSessionService.update(id!, { status }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['test-session', id] });
+      qc.invalidateQueries({ queryKey: ['test-sessions'] });
+      toastSuccess('Status updated');
+    },
+    onError: e => toastError(e),
+  });
+
   if (isLoading || !session) return <LoadingState />;
 
   const isAssignee = profile?.id === session.assigned_to;
@@ -95,6 +105,7 @@ export function TestSessionDetailPage() {
         title={session.name}
         subtitle={`Test Session · ${session.project?.name ?? ''}`}
         breadcrumbs={[{ label: 'Test Sessions', to: '/test-sessions' }, { label: session.name }]}
+        showBack
         actions={
           <Stack direction="row" spacing={1}>
             {session.status === 'pending' && canControl && (
@@ -133,7 +144,19 @@ export function TestSessionDetailPage() {
               <Stack spacing={1.5}>
                 <Box display="flex" justifyContent="space-between" alignItems="center">
                   <Typography variant="body2" color="text.secondary">Status</Typography>
-                  <Chip label={session.status.replace(/_/g, ' ')} size="small" color={STATUS_COLOR[session.status]} />
+                  <Select
+                    size="small"
+                    value={session.status}
+                    onChange={e => statusMutation.mutate(e.target.value as TestSessionStatus)}
+                    disabled={statusMutation.isPending}
+                    sx={{ minWidth: 130, height: 28, fontSize: 13 }}
+                  >
+                    {(['pending', 'in_progress', 'paused', 'completed', 'cancelled'] as TestSessionStatus[]).map(s => (
+                      <MenuItem key={s} value={s} sx={{ textTransform: 'capitalize', fontSize: 13 }}>
+                        {s.replace(/_/g, ' ')}
+                      </MenuItem>
+                    ))}
+                  </Select>
                 </Box>
                 <Divider />
                 <Box display="flex" justifyContent="space-between" alignItems="center">

@@ -307,6 +307,10 @@ export function TestSessionExecutionPage() {
     );
   }
 
+  const executionMode = currentCase?.test_case?.execution_mode ?? 'quick';
+  const isQuickMode = executionMode === 'quick';
+  const isDetailedNoSteps = executionMode === 'detailed' && steps.length === 0;
+
   const stepStatesArr = steps.map(s => stepStates[s.step_number] ?? { status: 'not_tested' as StepResultStatus, actual_result: '', notes: '' });
   const doneSteps = stepStatesArr.filter(s => s.status !== 'not_tested').length;
   const stepProgress = steps.length > 0 ? (doneSteps / steps.length) * 100 : 0;
@@ -316,12 +320,20 @@ export function TestSessionExecutionPage() {
   const sessionDone = cases.filter(c => ['pass','fail','blocked','skipped'].includes(c.status)).length;
   const sessionProgress = cases.length > 0 ? (sessionDone / cases.length) * 100 : 0;
 
+  const QUICK_RESULT_OPTIONS: { status: StepResultStatus; label: string; color: string; icon: React.ReactNode }[] = [
+    { status: 'pass',    label: 'PASS',    color: '#10B981', icon: <CheckCircleIcon /> },
+    { status: 'fail',    label: 'FAIL',    color: '#EF4444', icon: <CancelIcon /> },
+    { status: 'blocked', label: 'BLOCKED', color: '#F59E0B', icon: <BlockIcon /> },
+    { status: 'skipped', label: 'SKIP',    color: '#6B7280', icon: <SkipNextIcon /> },
+  ];
+
   return (
     <Box maxWidth={960} mx="auto">
       <PageHeader
         title="Test Execution"
         subtitle={session.name}
         breadcrumbs={[{ label: 'Sessions', to: '/test-sessions' }, { label: session.name, to: `/test-sessions/${id}` }, { label: 'Execute' }]}
+        showBack
         actions={
           <Button variant="outlined" onClick={() => navigate(`/test-sessions/${id}`)}>
             Exit Execution
@@ -365,199 +377,298 @@ export function TestSessionExecutionPage() {
         })}
       </Box>
 
-      <Grid container spacing={2}>
-        {/* Left: Test Case Info */}
-        <Grid item xs={12} md={4}>
-          <Card sx={{ mb: 2, borderLeft: '4px solid #4F46E5' }}>
-            <CardContent>
-              <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>CASE {caseIndex + 1} OF {cases.length}</Typography>
-              <Typography variant="h6" fontWeight={700} lineHeight={1.3} mb={0.5}>
-                {currentCase?.test_case?.title ?? '—'}
-              </Typography>
-              <Typography variant="caption" fontFamily="monospace" color="primary.main">
-                {currentCase?.test_case?.test_id ?? '—'}
-              </Typography>
-              <Box display="flex" gap={1} mt={1} flexWrap="wrap">
-                <Chip label={currentCase?.test_case?.priority ?? '—'} size="small" />
-                {currentCase?.test_case?.module && (
-                  <Chip label={currentCase.test_case.module.name} size="small" variant="outlined" />
-                )}
-              </Box>
-            </CardContent>
-          </Card>
-
-          {/* Steps sidebar */}
-          <Card>
-            <CardContent sx={{ pb: '12px !important' }}>
-              <Typography variant="caption" fontWeight={700} color="text.secondary">STEPS</Typography>
-            </CardContent>
-            <Divider />
-            {steps.map((step, i) => {
-              const state = stepStates[step.step_number];
-              const color = state?.status === 'pass' ? '#10B981' : state?.status === 'fail' ? '#EF4444' : state?.status === 'blocked' ? '#F59E0B' : state?.status === 'skipped' ? '#6B7280' : undefined;
-              return (
-                <Box
-                  key={step.id}
-                  onClick={() => setCurrentStepIdx(i)}
-                  sx={{
-                    px: 2, py: 1, cursor: 'pointer',
-                    bgcolor: i === currentStepIdx ? 'action.selected' : 'transparent',
-                    borderLeft: `3px solid ${i === currentStepIdx ? '#4F46E5' : 'transparent'}`,
-                    '&:hover': { bgcolor: 'action.hover' },
-                  }}
-                >
-                  <Box display="flex" alignItems="center" gap={1}>
-                    <Avatar sx={{ width: 20, height: 20, fontSize: 11, bgcolor: color ?? (i === currentStepIdx ? '#4F46E5' : 'grey.400') }}>
-                      {state?.status === 'pass' ? '✓' : state?.status === 'fail' ? '✗' : step.step_number}
-                    </Avatar>
-                    <Typography variant="caption" sx={{ flex: 1 }} noWrap>{step.description}</Typography>
-                  </Box>
+      {/* ── QUICK MODE ── */}
+      {isQuickMode && (
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={5}>
+            <Card sx={{ borderLeft: '4px solid #4F46E5' }}>
+              <CardContent>
+                <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>CASE {caseIndex + 1} OF {cases.length}</Typography>
+                <Typography variant="h6" fontWeight={700} lineHeight={1.3} mb={0.5}>
+                  {currentCase?.test_case?.title ?? '—'}
+                </Typography>
+                <Typography variant="caption" fontFamily="monospace" color="primary.main" display="block" mb={1.5}>
+                  {currentCase?.test_case?.test_id ?? '—'}
+                </Typography>
+                <Box display="flex" gap={1} flexWrap="wrap" mb={1.5}>
+                  <Chip label={(currentCase?.test_case?.priority ?? 'medium').toUpperCase()} size="small" />
+                  <Chip label="⚡ Quick" size="small" variant="outlined" color="default" />
+                  {currentCase?.test_case?.module && (
+                    <Chip label={currentCase.test_case.module.name} size="small" variant="outlined" />
+                  )}
                 </Box>
-              );
-            })}
-          </Card>
-        </Grid>
+                {currentCase?.test_case?.estimated_minutes && (
+                  <Typography variant="caption" color="text.secondary">
+                    Est. {currentCase.test_case.estimated_minutes} min
+                  </Typography>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
 
-        {/* Right: Current step execution */}
-        <Grid item xs={12} md={8}>
-          {currentStep ? (
+          <Grid item xs={12} md={7}>
             <Card>
               <CardContent>
-                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                  <Typography variant="subtitle1" fontWeight={700}>Step {currentStep.step_number}</Typography>
-                  <Box display="flex" gap={1}>
-                    <IconButton size="small" disabled={currentStepIdx === 0} onClick={() => setCurrentStepIdx(i => i - 1)}><NavigateBeforeIcon /></IconButton>
-                    <Typography variant="body2" color="text.secondary" alignSelf="center">{currentStepIdx + 1}/{steps.length}</Typography>
-                    <IconButton size="small" disabled={currentStepIdx === steps.length - 1} onClick={() => setCurrentStepIdx(i => i + 1)}><NavigateNextIcon /></IconButton>
+                {currentCase?.test_case?.description && (
+                  <Box sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
+                    <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={0.5}>DESCRIPTION</Typography>
+                    <Typography variant="body2">{currentCase.test_case.description}</Typography>
                   </Box>
-                </Box>
-
-                {/* Step progress */}
-                <LinearProgress variant="determinate" value={stepProgress} sx={{ mb: 2, height: 6, borderRadius: 3 }} />
-
-                {/* Action */}
-                <Box sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
-                  <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={0.5}>ACTION</Typography>
-                  <Typography variant="body2">{currentStep.description}</Typography>
-                </Box>
-
-                {/* Expected */}
-                <Box sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)' }}>
-                  <Typography variant="caption" fontWeight={700} color="success.main" display="block" mb={0.5}>EXPECTED RESULT</Typography>
-                  <Typography variant="body2">{currentStep.expected_result}</Typography>
-                </Box>
-
-                {currentStep.notes && (
-                  <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
-                    <Typography variant="caption">{currentStep.notes}</Typography>
-                  </Alert>
                 )}
 
-                {/* Result buttons */}
+                {currentCase?.test_case?.preconditions && (
+                  <Box sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)' }}>
+                    <Typography variant="caption" fontWeight={700} color="warning.main" display="block" mb={0.5}>PRECONDITIONS</Typography>
+                    <Typography variant="body2">{currentCase.test_case.preconditions}</Typography>
+                  </Box>
+                )}
+
                 <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={1}>RESULT *</Typography>
                 <Box display="flex" gap={1} flexWrap="wrap" mb={2}>
-                  {RESULT_OPTIONS.map(opt => (
+                  {QUICK_RESULT_OPTIONS.map(opt => (
                     <Button
                       key={opt.status}
-                      size="small"
-                      variant={currentStepState?.status === opt.status ? 'contained' : 'outlined'}
+                      variant="outlined"
                       startIcon={opt.icon}
-                      onClick={() => setStep(currentStep.step_number, { status: opt.status })}
+                      onClick={() => completeCase(opt.status)}
+                      disabled={saving}
                       sx={{
                         borderColor: opt.color,
-                        color: currentStepState?.status === opt.status ? '#fff' : opt.color,
-                        bgcolor: currentStepState?.status === opt.status ? opt.color : 'transparent',
+                        color: opt.color,
                         '&:hover': { bgcolor: `${opt.color}22`, borderColor: opt.color },
+                        minWidth: 110,
                       }}
                     >
-                      {opt.label}
+                      {saving ? <CircularProgress size={16} color="inherit" /> : opt.label}
                     </Button>
                   ))}
                 </Box>
 
-                {/* Actual result (shown when fail/blocked) */}
-                <Collapse in={currentStepState?.status === 'fail' || currentStepState?.status === 'blocked'}>
-                  <TextField
-                    label="Actual Result *"
-                    value={currentStepState?.actual_result ?? ''}
-                    onChange={e => setStep(currentStep.step_number, { actual_result: e.target.value })}
-                    fullWidth multiline rows={2} size="small" sx={{ mb: 2 }}
-                    placeholder="What actually happened?"
-                    error={currentStepState?.status === 'fail' && !currentStepState?.actual_result}
-                  />
-                </Collapse>
-
+                <Divider sx={{ mb: 2 }} />
                 <TextField
                   label="Notes (optional)"
-                  value={currentStepState?.notes ?? ''}
-                  onChange={e => setStep(currentStep.step_number, { notes: e.target.value })}
-                  fullWidth multiline rows={2} size="small" sx={{ mb: 2 }}
+                  value={sessionNotes}
+                  onChange={e => setSessionNotes(e.target.value)}
+                  fullWidth multiline rows={2} size="small"
+                  placeholder="Observations about this test case…"
                 />
-
-                {/* Step actions */}
-                <Divider sx={{ mb: 2 }} />
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Box display="flex" gap={1}>
-                    <Tooltip title="Auto-save active">
-                      <Button
-                        size="small" variant="outlined" startIcon={saved ? <CheckIcon /> : saving ? <CircularProgress size={14} /> : <SaveIcon />}
-                        onClick={saveCurrentStep} disabled={saving}
-                        color={saved ? 'success' : 'primary'}
-                      >
-                        {saved ? 'Saved' : 'Save'}
-                      </Button>
-                    </Tooltip>
-                    {currentStepState?.status === 'fail' && (
-                      <Button size="small" variant="outlined" color="error" startIcon={<BugReportIcon />} onClick={() => { setBugForStep(currentStep.step_number); setBugDialogOpen(true); }}>
-                        File Bug
-                      </Button>
-                    )}
-                  </Box>
-                  <Box display="flex" gap={1}>
-                    {currentStepIdx < steps.length - 1 ? (
-                      <Button variant="contained" endIcon={<NavigateNextIcon />} onClick={handleStepNext} disabled={!currentStepState?.status || currentStepState.status === 'not_tested'}>
-                        Next Step
-                      </Button>
-                    ) : (
-                      <Box display="flex" gap={1}>
-                        <Button variant="outlined" color="error" onClick={() => completeCase('fail')} disabled={saving}>Mark FAIL</Button>
-                        <Button variant="contained" color="success" startIcon={<CheckCircleIcon />} onClick={() => completeCase(overallForCase)} disabled={saving}>
-                          Complete Case
-                        </Button>
-                      </Box>
-                    )}
-                  </Box>
-                </Box>
               </CardContent>
             </Card>
-          ) : (
-            <Card>
-              <CardContent>
-                <Alert severity="info">No steps defined for this test case.</Alert>
-                <Box display="flex" gap={1} mt={2} justifyContent="flex-end">
-                  <Button variant="outlined" color="error" onClick={() => completeCase('fail')}>FAIL</Button>
-                  <Button variant="outlined" color="warning" onClick={() => completeCase('blocked')}>BLOCKED</Button>
-                  <Button variant="outlined" onClick={() => completeCase('skipped')}>SKIP</Button>
-                  <Button variant="contained" color="success" onClick={() => completeCase('pass')}>PASS</Button>
-                </Box>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Session notes */}
-          <Card sx={{ mt: 2 }}>
-            <CardContent>
-              <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={1}>SESSION NOTES</Typography>
-              <TextField
-                value={sessionNotes}
-                onChange={e => setSessionNotes(e.target.value)}
-                fullWidth multiline rows={2} size="small"
-                placeholder="Notes about this session overall…"
-              />
-            </CardContent>
-          </Card>
+          </Grid>
         </Grid>
-      </Grid>
+      )}
+
+      {/* ── DETAILED MODE — NO STEPS ── */}
+      {isDetailedNoSteps && (
+        <Card>
+          <CardContent>
+            <Alert severity="error" sx={{ mb: 2 }}>
+              <Typography variant="body2" fontWeight={600} mb={0.5}>Execution blocked</Typography>
+              <Typography variant="body2">
+                This test case is configured for <strong>Detailed (step-by-step) execution</strong> but has no steps defined.
+                Add steps to the test case before running it, or change its execution mode to Quick.
+              </Typography>
+            </Alert>
+            <Box display="flex" gap={1} justifyContent="flex-end">
+              <Button variant="outlined" onClick={() => completeCase('blocked')} disabled={saving}>
+                Mark BLOCKED
+              </Button>
+              <Button variant="outlined" onClick={() => {
+                if (caseIndex < cases.length - 1) setCaseIndex(i => i + 1);
+                else navigate(`/test-sessions/${id}`);
+              }}>
+                Skip Case
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── DETAILED MODE — WITH STEPS ── */}
+      {!isQuickMode && !isDetailedNoSteps && (
+        <Grid container spacing={2}>
+          {/* Left: Test Case Info + Steps sidebar */}
+          <Grid item xs={12} md={4}>
+            <Card sx={{ mb: 2, borderLeft: '4px solid #4F46E5' }}>
+              <CardContent>
+                <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>CASE {caseIndex + 1} OF {cases.length}</Typography>
+                <Typography variant="h6" fontWeight={700} lineHeight={1.3} mb={0.5}>
+                  {currentCase?.test_case?.title ?? '—'}
+                </Typography>
+                <Typography variant="caption" fontFamily="monospace" color="primary.main">
+                  {currentCase?.test_case?.test_id ?? '—'}
+                </Typography>
+                <Box display="flex" gap={1} mt={1} flexWrap="wrap">
+                  <Chip label={currentCase?.test_case?.priority ?? '—'} size="small" />
+                  <Chip label="📋 Detailed" size="small" variant="outlined" color="info" />
+                  {currentCase?.test_case?.module && (
+                    <Chip label={currentCase.test_case.module.name} size="small" variant="outlined" />
+                  )}
+                </Box>
+              </CardContent>
+            </Card>
+
+            {/* Steps sidebar */}
+            <Card>
+              <CardContent sx={{ pb: '12px !important' }}>
+                <Typography variant="caption" fontWeight={700} color="text.secondary">STEPS</Typography>
+              </CardContent>
+              <Divider />
+              {steps.map((step, i) => {
+                const state = stepStates[step.step_number];
+                const color = state?.status === 'pass' ? '#10B981' : state?.status === 'fail' ? '#EF4444' : state?.status === 'blocked' ? '#F59E0B' : state?.status === 'skipped' ? '#6B7280' : undefined;
+                return (
+                  <Box
+                    key={step.id}
+                    onClick={() => setCurrentStepIdx(i)}
+                    sx={{
+                      px: 2, py: 1, cursor: 'pointer',
+                      bgcolor: i === currentStepIdx ? 'action.selected' : 'transparent',
+                      borderLeft: `3px solid ${i === currentStepIdx ? '#4F46E5' : 'transparent'}`,
+                      '&:hover': { bgcolor: 'action.hover' },
+                    }}
+                  >
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <Avatar sx={{ width: 20, height: 20, fontSize: 11, bgcolor: color ?? (i === currentStepIdx ? '#4F46E5' : 'grey.400') }}>
+                        {state?.status === 'pass' ? '✓' : state?.status === 'fail' ? '✗' : step.step_number}
+                      </Avatar>
+                      <Typography variant="caption" sx={{ flex: 1 }} noWrap>{step.description}</Typography>
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Card>
+          </Grid>
+
+          {/* Right: Current step execution */}
+          <Grid item xs={12} md={8}>
+            {currentStep ? (
+              <Card>
+                <CardContent>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                    <Typography variant="subtitle1" fontWeight={700}>Step {currentStep.step_number}</Typography>
+                    <Box display="flex" gap={1}>
+                      <IconButton size="small" disabled={currentStepIdx === 0} onClick={() => setCurrentStepIdx(i => i - 1)}><NavigateBeforeIcon /></IconButton>
+                      <Typography variant="body2" color="text.secondary" alignSelf="center">{currentStepIdx + 1}/{steps.length}</Typography>
+                      <IconButton size="small" disabled={currentStepIdx === steps.length - 1} onClick={() => setCurrentStepIdx(i => i + 1)}><NavigateNextIcon /></IconButton>
+                    </Box>
+                  </Box>
+
+                  {/* Step progress */}
+                  <LinearProgress variant="determinate" value={stepProgress} sx={{ mb: 2, height: 6, borderRadius: 3 }} />
+
+                  {/* Action */}
+                  <Box sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
+                    <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={0.5}>ACTION</Typography>
+                    <Typography variant="body2">{currentStep.description}</Typography>
+                  </Box>
+
+                  {/* Expected */}
+                  <Box sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)' }}>
+                    <Typography variant="caption" fontWeight={700} color="success.main" display="block" mb={0.5}>EXPECTED RESULT</Typography>
+                    <Typography variant="body2">{currentStep.expected_result}</Typography>
+                  </Box>
+
+                  {currentStep.notes && (
+                    <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
+                      <Typography variant="caption">{currentStep.notes}</Typography>
+                    </Alert>
+                  )}
+
+                  {/* Result buttons */}
+                  <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={1}>RESULT *</Typography>
+                  <Box display="flex" gap={1} flexWrap="wrap" mb={2}>
+                    {RESULT_OPTIONS.map(opt => (
+                      <Button
+                        key={opt.status}
+                        size="small"
+                        variant={currentStepState?.status === opt.status ? 'contained' : 'outlined'}
+                        startIcon={opt.icon}
+                        onClick={() => setStep(currentStep.step_number, { status: opt.status })}
+                        sx={{
+                          borderColor: opt.color,
+                          color: currentStepState?.status === opt.status ? '#fff' : opt.color,
+                          bgcolor: currentStepState?.status === opt.status ? opt.color : 'transparent',
+                          '&:hover': { bgcolor: `${opt.color}22`, borderColor: opt.color },
+                        }}
+                      >
+                        {opt.label}
+                      </Button>
+                    ))}
+                  </Box>
+
+                  {/* Actual result (shown when fail/blocked) */}
+                  <Collapse in={currentStepState?.status === 'fail' || currentStepState?.status === 'blocked'}>
+                    <TextField
+                      label="Actual Result *"
+                      value={currentStepState?.actual_result ?? ''}
+                      onChange={e => setStep(currentStep.step_number, { actual_result: e.target.value })}
+                      fullWidth multiline rows={2} size="small" sx={{ mb: 2 }}
+                      placeholder="What actually happened?"
+                      error={currentStepState?.status === 'fail' && !currentStepState?.actual_result}
+                    />
+                  </Collapse>
+
+                  <TextField
+                    label="Notes (optional)"
+                    value={currentStepState?.notes ?? ''}
+                    onChange={e => setStep(currentStep.step_number, { notes: e.target.value })}
+                    fullWidth multiline rows={2} size="small" sx={{ mb: 2 }}
+                  />
+
+                  {/* Step actions */}
+                  <Divider sx={{ mb: 2 }} />
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Box display="flex" gap={1}>
+                      <Tooltip title="Auto-save active">
+                        <Button
+                          size="small" variant="outlined" startIcon={saved ? <CheckIcon /> : saving ? <CircularProgress size={14} /> : <SaveIcon />}
+                          onClick={saveCurrentStep} disabled={saving}
+                          color={saved ? 'success' : 'primary'}
+                        >
+                          {saved ? 'Saved' : 'Save'}
+                        </Button>
+                      </Tooltip>
+                      {currentStepState?.status === 'fail' && (
+                        <Button size="small" variant="outlined" color="error" startIcon={<BugReportIcon />} onClick={() => { setBugForStep(currentStep.step_number); setBugDialogOpen(true); }}>
+                          File Bug
+                        </Button>
+                      )}
+                    </Box>
+                    <Box display="flex" gap={1}>
+                      {currentStepIdx < steps.length - 1 ? (
+                        <Button variant="contained" endIcon={<NavigateNextIcon />} onClick={handleStepNext} disabled={!currentStepState?.status || currentStepState.status === 'not_tested'}>
+                          Next Step
+                        </Button>
+                      ) : (
+                        <Box display="flex" gap={1}>
+                          <Button variant="outlined" color="error" onClick={() => completeCase('fail')} disabled={saving}>Mark FAIL</Button>
+                          <Button variant="contained" color="success" startIcon={<CheckCircleIcon />} onClick={() => completeCase(overallForCase)} disabled={saving}>
+                            Complete Case
+                          </Button>
+                        </Box>
+                      )}
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {/* Session notes */}
+            <Card sx={{ mt: 2 }}>
+              <CardContent>
+                <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" mb={1}>SESSION NOTES</Typography>
+                <TextField
+                  value={sessionNotes}
+                  onChange={e => setSessionNotes(e.target.value)}
+                  fullWidth multiline rows={2} size="small"
+                  placeholder="Notes about this session overall…"
+                />
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
 
       {/* Auto Bug Dialog */}
       {bugDialogOpen && currentCase && (

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Box, Button, Card, CardContent, Chip, CircularProgress, Dialog,
+  Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Dialog,
   DialogActions, DialogContent, DialogTitle, Divider, FormControl,
   Grid, IconButton, InputAdornment, InputLabel, LinearProgress,
   MenuItem, Select, Stack, Table, TableBody, TableCell, TableHead,
@@ -45,6 +45,7 @@ function AddCasesDialog({
 }) {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data: allCases = [], isLoading } = useQuery({
@@ -57,11 +58,12 @@ function AddCasesDialog({
     const q = search.toLowerCase();
     return allCases.filter(tc =>
       !alreadyLinked.has(tc.id) &&
+      (!priorityFilter || tc.priority === priorityFilter) &&
       (tc.title.toLowerCase().includes(q) ||
         tc.test_id.toLowerCase().includes(q) ||
         tc.module?.name?.toLowerCase().includes(q))
     );
-  }, [allCases, search, alreadyLinked]);
+  }, [allCases, search, priorityFilter, alreadyLinked]);
 
   const mutation = useMutation({
     mutationFn: () => testPlanService.addCases(planId, [...selected]),
@@ -84,9 +86,25 @@ function AddCasesDialog({
     });
   }
 
+  const allFilteredSelected = filtered.length > 0 && filtered.every(tc => selected.has(tc.id));
+  const someFilteredSelected = filtered.some(tc => selected.has(tc.id)) && !allFilteredSelected;
+
+  function toggleAll() {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        filtered.forEach(tc => next.delete(tc.id));
+      } else {
+        filtered.forEach(tc => next.add(tc.id));
+      }
+      return next;
+    });
+  }
+
   function handleClose() {
     setSelected(new Set());
     setSearch('');
+    setPriorityFilter('');
     onClose();
   }
 
@@ -94,15 +112,26 @@ function AddCasesDialog({
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>Add Test Cases</DialogTitle>
       <DialogContent>
-        <TextField
-          fullWidth
-          size="small"
-          placeholder="Search by ID, title, or module…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          sx={{ mb: 2, mt: 1 }}
-          InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
-        />
+        <Box display="flex" gap={1} mb={2} mt={1}>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search by ID, title, or module…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
+          />
+          <FormControl size="small" sx={{ minWidth: 130 }}>
+            <InputLabel>Priority</InputLabel>
+            <Select label="Priority" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
+              <MenuItem value="">All</MenuItem>
+              <MenuItem value="critical">Critical</MenuItem>
+              <MenuItem value="high">High</MenuItem>
+              <MenuItem value="medium">Medium</MenuItem>
+              <MenuItem value="low">Low</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
         {isLoading ? (
           <Box display="flex" justifyContent="center" py={4}><CircularProgress /></Box>
         ) : filtered.length === 0 ? (
@@ -114,7 +143,14 @@ function AddCasesDialog({
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
-                  <TableCell padding="checkbox" />
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      size="small"
+                      checked={allFilteredSelected}
+                      indeterminate={someFilteredSelected}
+                      onChange={toggleAll}
+                    />
+                  </TableCell>
                   <TableCell>ID</TableCell>
                   <TableCell>Title</TableCell>
                   <TableCell>Module</TableCell>
@@ -207,6 +243,16 @@ export function TestPlanDetailPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [removingCase, setRemovingCase] = useState<TestPlanCase | null>(null);
 
+  const statusMutation = useMutation({
+    mutationFn: (status: string) => testPlanService.update(id!, { status: status as any }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['test-plan', id] });
+      qc.invalidateQueries({ queryKey: ['test-plans'] });
+      toastSuccess('Status updated');
+    },
+    onError: e => toastError(e),
+  });
+
   const { data: plan, isLoading } = useQuery({
     queryKey: ['test-plan', id],
     queryFn: () => testPlanService.get(id!),
@@ -253,9 +299,20 @@ export function TestPlanDetailPage() {
           { label: 'Test Plans', to: '/test-plans' },
           { label: plan.name },
         ]}
+        showBack
         actions={
           <Stack direction="row" spacing={1}>
-            <Chip label={plan.status} color={plan.status === 'active' ? 'info' : 'default'} />
+            <Select
+              size="small"
+              value={plan.status}
+              onChange={e => statusMutation.mutate(e.target.value)}
+              disabled={statusMutation.isPending}
+              sx={{ minWidth: 120, height: 32 }}
+            >
+              {(['draft', 'active', 'completed', 'archived'] as const).map(s => (
+                <MenuItem key={s} value={s} sx={{ textTransform: 'capitalize' }}>{s.charAt(0).toUpperCase() + s.slice(1)}</MenuItem>
+              ))}
+            </Select>
             <Button
               variant="outlined"
               size="small"

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Card, CardContent, CardActionArea, Typography, Button, Chip, Dialog,
@@ -149,7 +149,9 @@ function PlanCard({ plan, onEdit, onDelete }: { plan: TestPlan; onEdit: () => vo
 export function TestPlansPage() {
   const { profile } = useAuth();
   const qc = useQueryClient();
-  const [selectedProject, setSelectedProject] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedProject = searchParams.get('project') ?? '';
+  const setSelectedProject = (id: string) => setSearchParams(id ? { project: id } : {}, { replace: true });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editPlan, setEditPlan] = useState<TestPlan | null>(null);
   const [deletePlan, setDeletePlan] = useState<TestPlan | null>(null);
@@ -159,6 +161,7 @@ export function TestPlansPage() {
     queryKey: ['test-plans', selectedProject],
     queryFn: () => testPlanService.list(selectedProject),
     enabled: !!selectedProject,
+    refetchOnMount: 'always',
   });
 
   const deleteMutation = useMutation({

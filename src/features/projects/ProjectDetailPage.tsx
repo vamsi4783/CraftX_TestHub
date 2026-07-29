@@ -94,6 +94,7 @@ export function ProjectDetailPage() {
         title={project.name}
         subtitle={`${PLATFORM_ICONS[project.platform]} ${PLATFORM_LABELS[project.platform]} · v${project.version}`}
         breadcrumbs={[{ label: 'Projects', to: '/projects' }, { label: project.name }]}
+        showBack
         actions={
           <>
             {project.repository_url && (

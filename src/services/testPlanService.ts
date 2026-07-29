@@ -5,11 +5,15 @@ export const testPlanService = {
   async list(projectId: string): Promise<TestPlan[]> {
     const { data, error } = await supabase
       .from('test_plans')
-      .select(`*, release:releases(id,name,version), creator:profiles!created_by(id,full_name)`)
+      .select(`*, release:releases(id,name,version), creator:profiles!created_by(id,full_name), test_plan_cases(count)`)
       .eq('project_id', projectId)
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return data as TestPlan[];
+    return (data ?? []).map((p: any) => ({
+      ...p,
+      case_count: p.test_plan_cases?.[0]?.count ?? 0,
+      test_plan_cases: undefined,
+    })) as TestPlan[];
   },
 
   async get(id: string): Promise<TestPlan> {

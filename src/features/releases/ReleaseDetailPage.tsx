@@ -411,6 +411,7 @@ export function ReleaseDetailPage() {
           { label: release.project?.name ?? '—', to: `/projects/${release.project_id}` },
           { label: release.name },
         ]}
+        showBack
         actions={
           <Button variant="outlined" size="small" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)}>Back</Button>
         }

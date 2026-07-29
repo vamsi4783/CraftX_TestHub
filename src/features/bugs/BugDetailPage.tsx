@@ -442,6 +442,7 @@ export function BugDetailPage() {
         title={bug.bug_id}
         subtitle={bug.title}
         breadcrumbs={[{ label: 'Bugs', to: '/bugs' }, { label: bug.bug_id }]}
+        showBack
         actions={
           <Stack direction="row" spacing={1}>
             {actions.slice(0, 2).map(a => (
