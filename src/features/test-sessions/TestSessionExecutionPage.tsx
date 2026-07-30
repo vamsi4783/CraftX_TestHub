@@ -228,7 +228,12 @@ export function TestSessionExecutionPage() {
   useEffect(() => {
     if (!session?.cases?.length) return;
     const firstPending = session.cases.findIndex(c => !['pass', 'fail', 'blocked', 'skipped'].includes(c.status));
-    if (firstPending > 0) setCaseIndex(firstPending);
+    if (firstPending > 0) {
+      setCaseIndex(firstPending);
+    } else if (firstPending === -1) {
+      // All cases are done — go back to the session detail instead of re-showing case 0
+      navigate(`/test-sessions/${id}`);
+    }
   }, [session?.id]);
 
   const currentCase = cases[caseIndex] ?? null;
