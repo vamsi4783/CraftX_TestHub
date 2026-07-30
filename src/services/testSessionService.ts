@@ -32,6 +32,7 @@ export const testSessionService = {
         )
       `)
       .eq('id', id)
+      .order('order_index', { referencedTable: 'test_session_cases', ascending: true })
       .single();
     if (error) throw error;
     const s = data as TestSession;

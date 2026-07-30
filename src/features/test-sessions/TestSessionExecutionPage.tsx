@@ -437,7 +437,7 @@ export function TestSessionExecutionPage() {
       {/* Case navigator */}
       <Box display="flex" gap={1} mb={2} flexWrap="wrap">
         {cases.map((sc, i) => {
-          const color = sc.status === 'pass' ? '#10B981' : sc.status === 'fail' ? '#EF4444' : sc.status === 'blocked' ? '#F59E0B' : sc.status === 'skipped' ? '#6B7280' : i === caseIndex ? '#4F46E5' : undefined;
+          const color = sc.status === 'pass' ? '#10B981' : sc.status === 'fail' ? '#EF4444' : sc.status === 'blocked' ? '#F59E0B' : sc.status === 'skipped' ? '#6B7280' : sc.status === 'in_progress' ? '#4F46E5' : i === caseIndex ? '#4F46E5' : undefined;
           return (
             <Tooltip key={sc.id} title={sc.test_case?.title ?? ''}>
               <Box
