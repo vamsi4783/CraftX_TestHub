@@ -248,9 +248,10 @@ export function TestSessionExecutionPage() {
     setCurrentStepIdx(0);
     setExecutionId(null);
 
+    const DONE = ['pass', 'fail', 'blocked', 'skipped', 'not_tested'];
+
     (async () => {
       const existing = await executionService.getBySessionCase(currentCase.id).catch(() => null);
-      const DONE = ['pass', 'fail', 'blocked', 'skipped', 'not_tested'];
 
       if (existing && existing.status === 'in_progress') {
         // Resume an in-progress execution — reload saved step results
@@ -281,8 +282,8 @@ export function TestSessionExecutionPage() {
         setStepStates(states);
         setStepResultIds(resultIds);
         setCurrentStepIdx(Math.max(0, steps.length - 1));
-      } else {
-        // No execution yet — start one fresh
+      } else if (!DONE.includes(currentCase.status)) {
+        // No execution yet and case is not already done — start one fresh
         const exec = await executionService.start({
           session_id: session.id,
           session_case_id: currentCase.id,

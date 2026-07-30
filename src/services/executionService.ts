@@ -21,9 +21,11 @@ export const executionService = {
       .select()
       .single();
     if (error) throw error;
-    // Link execution to session case
-    await supabase.from('test_session_cases').update({ execution_id: data.id, status: 'in_progress', started_at: new Date().toISOString() })
-      .eq('id', input.session_case_id);
+    // Link execution to session case — only set in_progress if not already completed
+    await supabase.from('test_session_cases')
+      .update({ execution_id: data.id, status: 'in_progress', started_at: new Date().toISOString() })
+      .eq('id', input.session_case_id)
+      .not('status', 'in', '("pass","fail","blocked","skipped")');
     return data as TestExecution;
   },
 
