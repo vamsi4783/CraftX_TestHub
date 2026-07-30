@@ -136,6 +136,7 @@ export function TestSessionExecutionPage() {
   const [bugForStep, setBugForStep] = useState<number | null>(null);
   const [sessionNotes, setSessionNotes] = useState('');
   const autoSaveTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pendingAdvance = useRef(false);
 
   const { data: session, isLoading } = useQuery({
     queryKey: ['test-session', id],
@@ -266,6 +267,17 @@ export function TestSessionExecutionPage() {
     }
   };
 
+  const advanceCase = useCallback(async () => {
+    if (!session) return;
+    if (caseIndex < cases.length - 1) {
+      setCaseIndex(i => i + 1);
+    } else {
+      await testSessionService.complete(session.id);
+      toastSuccess('All cases complete! Session finished.');
+      navigate(`/test-sessions/${id}`);
+    }
+  }, [caseIndex, cases.length, session, id, navigate]);
+
   const completeCase = async (finalStatus: StepResultStatus) => {
     if (!executionId || !currentCase || !session) return;
     setSaving(true);
@@ -275,19 +287,13 @@ export function TestSessionExecutionPage() {
       qc.invalidateQueries({ queryKey: ['test-session', id] });
       toastSuccess(`Case marked as ${finalStatus}`);
 
-      // Auto-open bug dialog on fail
       if (finalStatus === 'fail') {
+        // Open bug dialog first — advance happens after dialog is closed
+        pendingAdvance.current = true;
         setBugForStep(null);
         setBugDialogOpen(true);
-      }
-
-      // Move to next case or finish
-      if (caseIndex < cases.length - 1) {
-        setCaseIndex(i => i + 1);
       } else {
-        await testSessionService.complete(session.id);
-        toastSuccess('All cases complete! Session finished.');
-        navigate(`/test-sessions/${id}`);
+        await advanceCase();
       }
     } catch (e) {
       toastError(e);
@@ -637,17 +643,24 @@ export function TestSessionExecutionPage() {
       {bugDialogOpen && currentCase && (
         <AutoBugDialog
           open={bugDialogOpen}
-          onClose={() => { setBugDialogOpen(false); setBugForStep(null); if (currentStepIdx < steps.length - 1) setCurrentStepIdx(i => i + 1); }}
+          onClose={() => {
+            setBugDialogOpen(false);
+            setBugForStep(null);
+            if (pendingAdvance.current) {
+              pendingAdvance.current = false;
+              advanceCase();
+            } else if (currentStepIdx < steps.length - 1) {
+              setCurrentStepIdx(i => i + 1);
+            }
+          }}
           onCreated={(bug) => {
             if (bugForStep !== null) {
               const stepResultId = stepResultIds[bugForStep];
               if (stepResultId) {
                 executionService.linkBugToStep(stepResultId, bug.id).catch(() => null);
-                setStepResultIds(prev => ({ ...prev })); // trigger re-render
                 setStep(bugForStep, { bug_id: bug.id });
               }
             }
-            if (currentStepIdx < steps.length - 1) setCurrentStepIdx(i => i + 1);
           }}
           session={session}
           sessionCase={currentCase}
