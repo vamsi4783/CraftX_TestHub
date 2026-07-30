@@ -240,7 +240,10 @@ export function TestSessionExecutionPage() {
   const steps: TestCaseStep[] = (currentCase?.test_case?.steps ?? []).sort((a, b) => a.step_number - b.step_number);
   const currentStep = steps[currentStepIdx] ?? null;
 
-  // Start or resume execution for current case
+  // Start or resume execution for current case.
+  // IMPORTANT: the cleanup function sets `cancelled = true` so that if caseIndex
+  // advances before this async block finishes, no stale setExecutionId / start call
+  // can overwrite the state that the newer effect has already set.
   useEffect(() => {
     if (!currentCase || !session || !profile) return;
     setStepStates({});
@@ -248,15 +251,18 @@ export function TestSessionExecutionPage() {
     setCurrentStepIdx(0);
     setExecutionId(null);
 
+    let cancelled = false;
     const DONE = ['pass', 'fail', 'blocked', 'skipped', 'not_tested'];
 
     (async () => {
       const existing = await executionService.getBySessionCase(currentCase.id).catch(() => null);
+      if (cancelled) return;
 
       if (existing && existing.status === 'in_progress') {
         // Resume an in-progress execution — reload saved step results
         setExecutionId(existing.id);
         const results = await executionService.getStepResults(existing.id).catch(() => []);
+        if (cancelled) return;
         const states: Record<number, StepState> = {};
         const resultIds: Record<number, string> = {};
         results.forEach(r => {
@@ -269,10 +275,9 @@ export function TestSessionExecutionPage() {
         setCurrentStepIdx(Math.min(lastDone, steps.length - 1));
       } else if (existing && DONE.includes(existing.status)) {
         // Already completed — load results read-only, never start a new execution.
-        // Starting a new execution would reset the case status to 'in_progress' and
-        // overwrite the completed color in the navigator.
         setExecutionId(existing.id);
         const results = await executionService.getStepResults(existing.id).catch(() => []);
+        if (cancelled) return;
         const states: Record<number, StepState> = {};
         const resultIds: Record<number, string> = {};
         results.forEach(r => {
@@ -294,9 +299,12 @@ export function TestSessionExecutionPage() {
           environment: 'QA',
           step_snapshot: steps,
         }).catch(() => null);
+        if (cancelled) return;
         if (exec) setExecutionId(exec.id);
       }
     })();
+
+    return () => { cancelled = true; };
   }, [caseIndex, currentCase?.id]);
 
   // Auto-save step result every 30s
