@@ -62,11 +62,43 @@ function AutoBugDialog({
   stepResult: StepState;
 }) {
   const { profile } = useAuth();
-  const [title, setTitle] = useState(`[${sessionCase.test_case?.test_id}] Step ${stepNumber} failed`);
+  const tc = sessionCase.test_case;
+  const isQuick = !stepNumber;
+
+  const defaultTitle = `[${tc?.test_id ?? ''}] ${tc?.title ?? 'Test case failed'}`;
+
+  const buildDescription = () => {
+    const lines: string[] = [];
+    lines.push(`**Test Case:** ${tc?.test_id} — ${tc?.title ?? ''}`);
+    if (tc?.module?.name) lines.push(`**Module:** ${tc.module.name}`);
+    if (tc?.priority)     lines.push(`**Priority:** ${tc.priority}`);
+    lines.push('');
+    if (tc?.preconditions) {
+      lines.push('**Preconditions:**');
+      lines.push(tc.preconditions);
+      lines.push('');
+    }
+    if (!isQuick) {
+      lines.push(`**Failed at Step:** ${stepNumber}`);
+      lines.push('');
+    }
+    if (stepResult.actual_result) {
+      lines.push('**What happened (Actual Result):**');
+      lines.push(stepResult.actual_result);
+      lines.push('');
+    }
+    if (stepResult.notes) {
+      lines.push('**Tester Notes:**');
+      lines.push(stepResult.notes);
+    }
+    return lines.join('\n').trim();
+  };
+
+  const [title, setTitle] = useState(defaultTitle);
   const [severity, setSeverity] = useState<'critical' | 'high' | 'medium' | 'low'>('high');
-  const [description, setDescription] = useState(
-    `Test Case: ${sessionCase.test_case?.title ?? ''}\nStep ${stepNumber}: ${stepResult.actual_result || stepResult.notes}`
-  );
+  const [description, setDescription] = useState(buildDescription);
+  const [actualResult, setActualResult] = useState(stepResult.actual_result || '');
+  const [stepsToReproduce, setStepsToReproduce] = useState('');
 
   const mutation = useMutation({
     mutationFn: () => bugService.create({
@@ -79,8 +111,8 @@ function AutoBugDialog({
       priority: 'p2', status: 'new',
       environment: 'QA',
       reported_by: profile!.id,
-      steps_to_reproduce: stepResult.actual_result,
-      actual_result: stepResult.actual_result,
+      steps_to_reproduce: stepsToReproduce || undefined,
+      actual_result: actualResult || undefined,
     }),
     onSuccess: bug => {
       onCreated(bug);
@@ -91,27 +123,73 @@ function AutoBugDialog({
   });
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <BugReportIcon color="error" /> Create Bug Report
+        <BugReportIcon color="error" /> Report Bug
       </DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-        <Alert severity="warning" sx={{ py: 0.5 }}>
-          Step {stepNumber} failed. Fill in the bug details below.
-        </Alert>
-        <TextField label="Bug Title *" value={title} onChange={e => setTitle(e.target.value)} fullWidth />
+        {/* Context banner */}
+        <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'error.main', color: '#fff', display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+          <BugReportIcon sx={{ mt: 0.25, fontSize: 18 }} />
+          <Box>
+            <Typography variant="body2" fontWeight={700}>{tc?.test_id} — {tc?.title}</Typography>
+            {tc?.module?.name && <Typography variant="caption" sx={{ opacity: 0.85 }}>Module: {tc.module.name}</Typography>}
+          </Box>
+        </Box>
+
+        <TextField
+          label="Bug Title *"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          fullWidth
+          helperText="Edit to make the title more specific if needed"
+        />
+
         <Grid container spacing={2}>
           <Grid item xs={6}>
-            <TextField select label="Severity" value={severity} onChange={e => setSeverity(e.target.value as typeof severity)} fullWidth SelectProps={{ native: true }}>
+            <TextField
+              select label="Severity" value={severity}
+              onChange={e => setSeverity(e.target.value as typeof severity)}
+              fullWidth SelectProps={{ native: true }}
+            >
               {['critical', 'high', 'medium', 'low'].map(s => <option key={s} value={s}>{s}</option>)}
             </TextField>
           </Grid>
         </Grid>
-        <TextField label="Description / Steps to Reproduce" value={description} onChange={e => setDescription(e.target.value)} multiline rows={4} fullWidth />
+
+        <TextField
+          label="What actually happened? *"
+          value={actualResult}
+          onChange={e => setActualResult(e.target.value)}
+          multiline rows={3} fullWidth
+          placeholder="Describe exactly what went wrong — what you saw, what error appeared, what didn't work…"
+          error={!actualResult.trim()}
+          helperText={!actualResult.trim() ? 'Required — helps the developer reproduce the issue' : ''}
+        />
+
+        <TextField
+          label="Steps to reproduce (optional)"
+          value={stepsToReproduce}
+          onChange={e => setStepsToReproduce(e.target.value)}
+          multiline rows={3} fullWidth
+          placeholder={`e.g.\n1. Open the app\n2. Navigate to …\n3. Tap …\n4. See error`}
+        />
+
+        <TextField
+          label="Additional context (auto-filled from test case)"
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          multiline rows={4} fullWidth
+          helperText="Pre-filled with test case details — edit or expand as needed"
+        />
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose}>Skip Bug Report</Button>
-        <Button variant="contained" color="error" startIcon={<BugReportIcon />} disabled={!title.trim() || mutation.isPending} onClick={() => mutation.mutate()}>
+        <Button onClick={onClose} color="inherit">Skip — don't create bug</Button>
+        <Button
+          variant="contained" color="error" startIcon={<BugReportIcon />}
+          disabled={!title.trim() || !actualResult.trim() || mutation.isPending}
+          onClick={() => mutation.mutate()}
+        >
           {mutation.isPending ? 'Creating…' : 'Create Bug'}
         </Button>
       </DialogActions>
