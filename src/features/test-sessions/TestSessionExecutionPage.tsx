@@ -249,11 +249,12 @@ export function TestSessionExecutionPage() {
     setExecutionId(null);
 
     (async () => {
-      // Check for existing in-progress execution
       const existing = await executionService.getBySessionCase(currentCase.id).catch(() => null);
+      const DONE = ['pass', 'fail', 'blocked', 'skipped', 'not_tested'];
+
       if (existing && existing.status === 'in_progress') {
+        // Resume an in-progress execution — reload saved step results
         setExecutionId(existing.id);
-        // Load saved step results
         const results = await executionService.getStepResults(existing.id).catch(() => []);
         const states: Record<number, StepState> = {};
         const resultIds: Record<number, string> = {};
@@ -263,11 +264,25 @@ export function TestSessionExecutionPage() {
         });
         setStepStates(states);
         setStepResultIds(resultIds);
-        // Resume at last incomplete step
         const lastDone = results.filter(r => r.status !== 'not_tested').length;
         setCurrentStepIdx(Math.min(lastDone, steps.length - 1));
+      } else if (existing && DONE.includes(existing.status)) {
+        // Already completed — load results read-only, never start a new execution.
+        // Starting a new execution would reset the case status to 'in_progress' and
+        // overwrite the completed color in the navigator.
+        setExecutionId(existing.id);
+        const results = await executionService.getStepResults(existing.id).catch(() => []);
+        const states: Record<number, StepState> = {};
+        const resultIds: Record<number, string> = {};
+        results.forEach(r => {
+          states[r.step_number] = { status: r.status as StepResultStatus, actual_result: r.actual_result ?? '', notes: r.notes ?? '', bug_id: r.bug_id ?? undefined };
+          resultIds[r.step_number] = r.id;
+        });
+        setStepStates(states);
+        setStepResultIds(resultIds);
+        setCurrentStepIdx(Math.max(0, steps.length - 1));
       } else {
-        // Start new execution
+        // No execution yet — start one fresh
         const exec = await executionService.start({
           session_id: session.id,
           session_case_id: currentCase.id,
@@ -437,20 +452,23 @@ export function TestSessionExecutionPage() {
       {/* Case navigator */}
       <Box display="flex" gap={1} mb={2} flexWrap="wrap">
         {cases.map((sc, i) => {
-          const color = sc.status === 'pass' ? '#10B981' : sc.status === 'fail' ? '#EF4444' : sc.status === 'blocked' ? '#F59E0B' : sc.status === 'skipped' ? '#6B7280' : sc.status === 'in_progress' ? '#4F46E5' : i === caseIndex ? '#4F46E5' : undefined;
+          const statusColor = sc.status === 'pass' ? '#10B981' : sc.status === 'fail' ? '#EF4444' : sc.status === 'blocked' ? '#F59E0B' : sc.status === 'skipped' ? '#6B7280' : undefined;
+          const isSelected = i === caseIndex;
           return (
             <Tooltip key={sc.id} title={sc.test_case?.title ?? ''}>
               <Box
-                onClick={() => { if (i !== caseIndex) setCaseIndex(i); }}
+                onClick={() => { if (!isSelected) setCaseIndex(i); }}
                 sx={{
                   width: 32, height: 32, borderRadius: 1, cursor: 'pointer',
-                  bgcolor: color ? `${color}22` : 'action.hover',
-                  border: `2px solid ${color ?? (i === caseIndex ? '#4F46E5' : 'transparent')}`,
+                  bgcolor: statusColor ? `${statusColor}22` : isSelected ? 'rgba(79,70,229,0.1)' : 'action.hover',
+                  border: `2px solid ${isSelected ? '#4F46E5' : statusColor ?? 'transparent'}`,
+                  outline: isSelected && statusColor ? `2px solid #4F46E5` : 'none',
+                  outlineOffset: '1px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'all 0.15s',
                 }}
               >
-                <Typography variant="caption" fontWeight={700} sx={{ color: color ?? 'text.secondary', fontSize: 10 }}>{i + 1}</Typography>
+                <Typography variant="caption" fontWeight={700} sx={{ color: statusColor ?? (isSelected ? '#4F46E5' : 'text.secondary'), fontSize: 10 }}>{i + 1}</Typography>
               </Box>
             </Tooltip>
           );
