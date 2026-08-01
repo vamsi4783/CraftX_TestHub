@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { RecorderInitDialog } from '@/features/recorder';
+import { useRecorder }        from '@/features/recorder';
+import VideoCallIcon           from '@mui/icons-material/VideoCall';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -93,6 +96,9 @@ export function TestSessionDetailPage() {
     onError: e => toastError(e),
   });
 
+  const { state: recorderState } = useRecorder();
+  const [recorderDialogOpen, setRecorderDialogOpen] = useState(false);
+
   if (isLoading || !session) return <LoadingState />;
 
   const isAssignee = profile?.id === session.assigned_to;
@@ -131,8 +137,27 @@ export function TestSessionDetailPage() {
                 Resume
               </Button>
             )}
+            {/* Execution Recorder — available on any active session */}
+            {canControl && recorderState === 'IDLE' && (
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<VideoCallIcon />}
+                onClick={() => setRecorderDialogOpen(true)}
+                size="small"
+              >
+                Record
+              </Button>
+            )}
           </Stack>
         }
+      />
+
+      <RecorderInitDialog
+        open={recorderDialogOpen}
+        onClose={() => setRecorderDialogOpen(false)}
+        testSessionId={id}
+        releaseId={session.release_id ?? undefined}
       />
 
       <Grid container spacing={3} mb={3}>

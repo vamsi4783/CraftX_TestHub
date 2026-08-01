@@ -10,7 +10,8 @@ import { queryClient } from '@/lib/queryClient';
 import { router } from '@/routes';
 import { ToastProvider } from '@/components/common/ToastProvider';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
-import { useRealtimeSync } from '@/hooks/useRealtimeSync';
+import { useRealtimeSync }         from '@/hooks/useRealtimeSync';
+import { RecorderProvider, FloatingRecorderToolbar } from '@/features/recorder';
 
 function RealtimeSync() {
   useRealtimeSync();
@@ -26,9 +27,12 @@ function ThemedApp() {
       <CssBaseline />
       <ErrorBoundary>
         <AuthProvider>
-          <RealtimeSync />
-          <RouterProvider router={router} />
-          <ToastProvider />
+          <RecorderProvider>
+            <RealtimeSync />
+            <RouterProvider router={router} />
+            <FloatingRecorderToolbar />
+            <ToastProvider />
+          </RecorderProvider>
         </AuthProvider>
       </ErrorBoundary>
     </ThemeProvider>
