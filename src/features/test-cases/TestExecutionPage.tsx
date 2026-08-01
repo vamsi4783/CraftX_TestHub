@@ -66,6 +66,7 @@ export function TestExecutionPage() {
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['assignments'] });
+      qc.invalidateQueries({ queryKey: ['my-assignments'] });
       navigate(-1);
     },
   });

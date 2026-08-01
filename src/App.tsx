@@ -10,6 +10,12 @@ import { queryClient } from '@/lib/queryClient';
 import { router } from '@/routes';
 import { ToastProvider } from '@/components/common/ToastProvider';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
+
+function RealtimeSync() {
+  useRealtimeSync();
+  return null;
+}
 
 function ThemedApp() {
   const { mode } = useThemeMode();
@@ -20,6 +26,7 @@ function ThemedApp() {
       <CssBaseline />
       <ErrorBoundary>
         <AuthProvider>
+          <RealtimeSync />
           <RouterProvider router={router} />
           <ToastProvider />
         </AuthProvider>
