@@ -1,0 +1,720 @@
+{
+  "version": "1.0",
+  "metadata": {
+    "exported_at": "2026-08-02T00:00:00.000Z",
+    "source_plan_id": "",
+    "source_plan_name": "RetailManager V2 RC1 – Guided Smoke Test"
+  },
+  "suite": {
+    "id": "RM-V2-RC1-SMOKE",
+    "name": "RetailManager V2 RC1 – Guided Smoke Test",
+    "description": null,
+    "module": "General",
+    "version": "2.0.0-rc1",
+    "tags": ["smoke", "rc1", "production-readiness", "v2"],
+    "automation": { "runner": null, "config": {} }
+  },
+  "test_cases": [
+    {
+      "id": "RM-001",
+      "title": "Login with valid phone number via WhatsApp OTP",
+      "description": "Verify a retailer can log in using their registered phone number and receive an OTP via WhatsApp.",
+      "priority": "critical",
+      "module": "Authentication",
+      "preconditions": "App is installed. Retailer has a registered phone number. WhatsApp is reachable.",
+      "expected_result": "Retailer is authenticated and lands on the Dashboard.",
+      "tags": ["login", "otp", "whatsapp", "critical-path"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Open the RetailManager app on the device.", "expected": "Splash screen appears, then the Login screen loads.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Enter a registered retailer phone number in the Phone Number field.", "expected": "Phone number is accepted and formatted correctly (e.g., +91XXXXXXXXXX).", "notes": "Use test account: +91-9999999999", "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Tap 'Send OTP'.", "expected": "App displays 'OTP sent to your WhatsApp' confirmation message. OTP input field appears.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Check WhatsApp on the device and note the 6-digit OTP received.", "expected": "A WhatsApp message from the system arrives within 30 seconds containing a 6-digit OTP.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 5, "action": "Enter the OTP into the OTP field.", "expected": "Each digit is accepted. The field shows the entered OTP masked or visible.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 6, "action": "Tap 'Verify OTP'.", "expected": "Authentication succeeds. App navigates to the Dashboard screen.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-002",
+      "title": "Login fails with incorrect OTP",
+      "description": "Verify the app rejects an incorrect OTP and shows an actionable error.",
+      "priority": "high",
+      "module": "Authentication",
+      "preconditions": "OTP has been sent to the retailer's phone.",
+      "expected_result": "Login is denied. Error message is displayed. Retailer remains on the OTP screen.",
+      "tags": ["login", "otp", "validation", "critical-path"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "On the OTP entry screen, enter an intentionally incorrect 6-digit OTP (e.g., 000000).", "expected": "OTP field accepts the entry.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap 'Verify OTP'.", "expected": "App displays an error such as 'Invalid OTP. Please try again.' Retailer stays on the OTP screen.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Verify the OTP field is cleared or editable for a retry.", "expected": "Retailer can re-enter the correct OTP without restarting the flow.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-003",
+      "title": "Dashboard loads with key metrics after login",
+      "description": "Verify the Dashboard displays today's sales summary, inventory alerts, and navigation correctly.",
+      "priority": "critical",
+      "module": "Dashboard",
+      "preconditions": "Retailer is logged in. At least one sale exists for today.",
+      "expected_result": "Dashboard renders all key metric cards without errors or blank states.",
+      "tags": ["dashboard", "smoke", "metrics"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Observe the Dashboard screen immediately after login.", "expected": "Dashboard loads within 3 seconds. No loading spinners remain after initial load.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Verify the Today's Sales card is visible and shows a numeric value.", "expected": "Today's Sales card displays a currency amount (e.g., ₹0.00 if no sales, or actual total).", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Verify the Total Products, Low Stock, and Out of Stock cards are visible.", "expected": "Each metric card displays a number. Low Stock and Out of Stock counts are non-negative integers.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Tap each bottom navigation item (Sales, Products, Reports, Settings).", "expected": "Each tap navigates to the correct screen without crash or blank page.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 5, "action": "Return to the Dashboard using the Home/Dashboard nav item.", "expected": "Dashboard re-renders correctly with the same data.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-004",
+      "title": "Add a new product with all required fields",
+      "description": "Verify a retailer can add a product and it appears in the product list.",
+      "priority": "critical",
+      "module": "Products",
+      "preconditions": "Retailer is logged in. At least one category exists.",
+      "expected_result": "Product is created and visible in the Products list with correct details.",
+      "tags": ["products", "add", "critical-path"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Products from the bottom navigation or side menu.", "expected": "Products list screen opens. Existing products are listed or empty state is shown.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap the '+' or 'Add Product' button.", "expected": "Add Product form opens with empty fields.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Enter Product Name: 'Smoke Test Biscuit Pack 200g'.", "expected": "Name field accepts the text.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Enter SKU: 'SKU-SMOKE-001'. Enter Selling Price: 25. Enter Cost Price: 18. Enter Opening Stock: 100.", "expected": "All fields accept the values. Currency fields show formatted numbers.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 5, "action": "Select a Category from the dropdown (e.g., 'Snacks' or any available category).", "expected": "Category is selected and shown in the field.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 6, "action": "Tap 'Save' or 'Add Product'.", "expected": "Success toast or confirmation appears. Product 'Smoke Test Biscuit Pack 200g' appears in the Products list.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 7, "action": "Search for 'Smoke Test Biscuit' in the Products search bar.", "expected": "The newly added product appears in search results with correct name, SKU, price, and stock.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-005",
+      "title": "Edit an existing product's selling price",
+      "description": "Verify a retailer can update a product's selling price and the change persists.",
+      "priority": "high",
+      "module": "Products",
+      "preconditions": "Product 'Smoke Test Biscuit Pack 200g' (SKU-SMOKE-001) exists from RM-004.",
+      "expected_result": "Selling price is updated to the new value and reflected in the product list.",
+      "tags": ["products", "edit"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Products and find 'Smoke Test Biscuit Pack 200g'.", "expected": "Product is visible in the list.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap the product to open its detail view, then tap 'Edit'.", "expected": "Edit Product form opens pre-filled with the existing product details.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Change the Selling Price from 25 to 28.", "expected": "Price field updates to 28.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Tap 'Save'.", "expected": "Success confirmation appears. Product list shows the updated price of ₹28.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-006",
+      "title": "Search and filter products by category",
+      "description": "Verify the product search and category filter return correct results.",
+      "priority": "medium",
+      "module": "Products",
+      "preconditions": "At least 5 products exist across at least 2 categories.",
+      "expected_result": "Search and filter results show only matching products.",
+      "tags": ["products", "search", "filter"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Products.", "expected": "Products list loads.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Type 'Smoke' in the search bar.", "expected": "Only products containing 'Smoke' in their name appear in the list.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Clear the search and apply a category filter (tap the filter icon and select a category).", "expected": "Only products belonging to the selected category are displayed.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Clear the category filter.", "expected": "All products are visible again.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-007",
+      "title": "Add a new customer",
+      "description": "Verify a retailer can add a customer with name and phone number.",
+      "priority": "high",
+      "module": "Customers",
+      "preconditions": "Retailer is logged in and on the Customers screen.",
+      "expected_result": "Customer is created and appears in the Customers list.",
+      "tags": ["customers", "add"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Customers from the menu.", "expected": "Customers list screen opens.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap 'Add Customer'.", "expected": "Add Customer form opens.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Enter Name: 'Raj Sharma', Phone: '9876543210', Email: 'raj@example.com' (optional), Address: '12 MG Road, Bangalore' (optional).", "expected": "All fields accept input.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Tap 'Save'.", "expected": "Success message appears. 'Raj Sharma' appears in the Customers list.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-008",
+      "title": "View customer purchase history",
+      "description": "Verify the customer detail screen shows their transaction history.",
+      "priority": "medium",
+      "module": "Customers",
+      "preconditions": "Customer 'Raj Sharma' exists. At least one sale has been linked to this customer.",
+      "expected_result": "Customer detail screen shows the correct purchase history.",
+      "tags": ["customers", "history"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Customers and tap on 'Raj Sharma'.", "expected": "Customer detail screen opens showing name, contact, and purchase summary.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Scroll to the Purchase History / Transactions section.", "expected": "List of past sales linked to this customer is displayed with date and amount.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Tap on one transaction.", "expected": "Sale detail opens showing the items purchased, total, and payment method.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-009",
+      "title": "Add a new supplier",
+      "description": "Verify a retailer can add a supplier with company name and contact details.",
+      "priority": "high",
+      "module": "Suppliers",
+      "preconditions": "Retailer is logged in.",
+      "expected_result": "Supplier is created and visible in the Suppliers list.",
+      "tags": ["suppliers", "add"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Suppliers from the menu.", "expected": "Suppliers list screen opens.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap 'Add Supplier'.", "expected": "Add Supplier form opens.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Enter Company Name: 'Sunrise Distributors', Contact Person: 'Mohan Kumar', Phone: '9123456789', GSTIN: '29ABCDE1234F1Z5' (optional).", "expected": "All fields accept the input.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Tap 'Save'.", "expected": "Success message appears. 'Sunrise Distributors' appears in the Suppliers list.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-010",
+      "title": "Create a new sale – cash payment",
+      "description": "Verify a retailer can create a sale, add products, and complete it with cash payment.",
+      "priority": "critical",
+      "module": "Sales",
+      "preconditions": "Retailer is logged in. At least one product with stock > 0 exists. Customer 'Raj Sharma' exists.",
+      "expected_result": "Sale is completed, invoice is generated, and stock is reduced.",
+      "tags": ["sales", "cash", "critical-path", "invoice"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Sales and tap 'New Sale' or the '+' button.", "expected": "New Sale screen opens with an empty cart.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Search for 'Smoke Test Biscuit' in the product search bar.", "expected": "Product appears in search results.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Tap the product to add it to the cart. Set quantity to 3.", "expected": "Product is added to the cart with quantity 3. Line total shows ₹84 (3 × ₹28).", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Tap 'Select Customer' and choose 'Raj Sharma'.", "expected": "Customer is linked to the sale. Customer name appears in the sale header.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 5, "action": "Review the order total. Verify subtotal and grand total are shown.", "expected": "Subtotal = ₹84. If GST is configured (e.g. 18% from RM-031), tax line = ₹15.12 and grand total = ₹99.12. If no tax is configured, grand total = ₹84. The grand total field must show a numeric ₹ value — a blank, zero, or error is a failure.", "notes": "Tax value depends on the GST rate set in Settings (RM-031). Note the actual grand total displayed for use in RM-022.", "automation_selector": null, "automation_action_config": {} },
+        { "order": 6, "action": "Select 'Cash' as the payment method.", "expected": "Cash payment option is selected. Amount Tendered field appears.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 7, "action": "Enter Amount Tendered: 100. Tap 'Complete Sale'.", "expected": "Sale is completed. Change due (₹16) is shown. Invoice/receipt screen appears.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 8, "action": "Navigate back to Products and check the stock of 'Smoke Test Biscuit Pack 200g'.", "expected": "Stock has decreased by 3 (from 100 to 97).", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-011",
+      "title": "Create a sale with UPI payment",
+      "description": "Verify a sale can be completed with UPI as the payment method.",
+      "priority": "critical",
+      "module": "Sales",
+      "preconditions": "Retailer is logged in. Product with stock > 0 exists.",
+      "expected_result": "Sale is saved with UPI payment method recorded.",
+      "tags": ["sales", "upi", "payment", "critical-path"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Sales and tap 'New Sale'. Search for 'Smoke Test Biscuit Pack 200g' and add it to the cart with quantity 2.", "expected": "Product is added to the cart. Line total shows ₹56 (2 × ₹28). Cart grand total is ₹56 (plus tax if configured).", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Select 'UPI' as the payment method.", "expected": "UPI option is selected. UPI Reference field may appear.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Enter a UPI Reference number (e.g., 'UPI123456789').", "expected": "Reference is accepted.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Tap 'Complete Sale'.", "expected": "Sale is saved. Invoice shows payment method as UPI with the reference number.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-012",
+      "title": "Apply a discount on a sale",
+      "description": "Verify the retailer can apply a percentage or flat discount to a sale.",
+      "priority": "high",
+      "module": "Sales",
+      "preconditions": "A new sale is in progress with at least one product in the cart.",
+      "expected_result": "Discount is applied and the grand total is reduced correctly.",
+      "tags": ["sales", "discount"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Start a new sale and add 'Smoke Test Biscuit Pack 200g' with quantity 5 (total ₹140).", "expected": "Cart shows ₹140 subtotal.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap the Discount field or 'Add Discount' option. Enter 10% discount.", "expected": "Discount of ₹14 is calculated and shown. Grand total updates to ₹126.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Complete the sale with Cash payment.", "expected": "Invoice shows the discount line item and the discounted total.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-013",
+      "title": "View and print a sale invoice",
+      "description": "Verify the retailer can view an invoice and initiate print/share after a sale.",
+      "priority": "high",
+      "module": "Sales",
+      "preconditions": "At least one completed sale exists.",
+      "expected_result": "Invoice displays correctly and print/share option is accessible.",
+      "tags": ["sales", "invoice", "print"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Sales History / All Sales.", "expected": "List of past sales is displayed with date and amount.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap on the most recent completed sale.", "expected": "Sale detail/invoice screen opens showing all line items, totals, and payment method.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Tap 'Print' or 'Share Invoice'.", "expected": "Print dialog or share sheet appears. The invoice is formatted for the selected paper size (e.g., 80mm thermal).", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-014",
+      "title": "Create a purchase order from a supplier",
+      "description": "Verify a retailer can create a purchase order linked to a supplier.",
+      "priority": "critical",
+      "module": "Purchases",
+      "preconditions": "Supplier 'Sunrise Distributors' exists. At least one product exists.",
+      "expected_result": "Purchase order is created with pending status and linked to the supplier.",
+      "tags": ["purchases", "po", "critical-path"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Purchases from the menu.", "expected": "Purchases list screen opens.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap 'New Purchase' or '+'.", "expected": "New Purchase form opens.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Select Supplier: 'Sunrise Distributors'.", "expected": "Supplier is linked to the purchase order.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Add 'Smoke Test Biscuit Pack 200g' with quantity 50 and purchase price ₹18.", "expected": "Line item is added. Total shows ₹900.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 5, "action": "Set Invoice Date to today's date.", "expected": "Date is set correctly.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 6, "action": "Tap 'Save Purchase'.", "expected": "Purchase order is saved with 'Pending' or 'Ordered' status. It appears in the Purchases list.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-015",
+      "title": "Receive goods against a purchase order",
+      "description": "Verify that receiving goods against a PO updates the inventory stock.",
+      "priority": "critical",
+      "module": "Purchases",
+      "preconditions": "A pending purchase order exists from RM-014.",
+      "expected_result": "PO status changes to Received and product stock increases.",
+      "tags": ["purchases", "receive", "inventory", "critical-path"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Purchases and open the pending PO created in RM-014.", "expected": "PO detail screen shows status as Pending/Ordered.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap 'Receive Goods' or 'Mark as Received'.", "expected": "Receive Goods confirmation appears or status updates directly.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Confirm the receipt.", "expected": "PO status changes to 'Received'. Success message is shown.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Navigate to Products and check the stock of 'Smoke Test Biscuit Pack 200g'.", "expected": "Stock has increased by 50 (reflects the received quantity).", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-016",
+      "title": "View purchase history with supplier filter",
+      "description": "Verify the retailer can filter purchase history by supplier.",
+      "priority": "medium",
+      "module": "Purchases",
+      "preconditions": "At least 2 purchase orders exist, one from 'Sunrise Distributors'.",
+      "expected_result": "Filter returns only purchases from the selected supplier.",
+      "tags": ["purchases", "filter", "history"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Purchases.", "expected": "All purchase orders are listed.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Apply the Supplier filter and select 'Sunrise Distributors'.", "expected": "Only purchases from 'Sunrise Distributors' appear in the list.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Clear the filter.", "expected": "All purchases are shown again.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-017",
+      "title": "View inventory stock levels",
+      "description": "Verify the Inventory screen shows correct stock levels for all products.",
+      "priority": "critical",
+      "module": "Inventory",
+      "preconditions": "Multiple products exist with varying stock quantities.",
+      "expected_result": "Inventory list shows each product's current stock, reorder level, and status.",
+      "tags": ["inventory", "stock", "critical-path"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Inventory from the menu.", "expected": "Inventory list opens showing all products.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Verify 'Smoke Test Biscuit Pack 200g' is listed with its current stock.", "expected": "Product appears with stock count consistent with Sales and Purchase actions performed in earlier tests.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Look for any Low Stock or Out of Stock badges/indicators.", "expected": "Products with stock below reorder level show a warning indicator. Out-of-stock products show an alert.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-018",
+      "title": "Perform a manual stock adjustment",
+      "description": "Verify the retailer can manually adjust stock for a product (e.g., damage write-off).",
+      "priority": "high",
+      "module": "Inventory",
+      "preconditions": "Product with stock > 5 exists.",
+      "expected_result": "Stock quantity is updated after the adjustment.",
+      "tags": ["inventory", "adjustment"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Inventory and find 'Smoke Test Biscuit Pack 200g'.", "expected": "Product is listed.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap 'Adjust Stock' or the edit icon for the product.", "expected": "Stock Adjustment form opens showing current stock.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Set adjustment type to 'Decrease' (damage/loss) and enter quantity 2. Add reason: 'Damaged in storage'.", "expected": "Form accepts the adjustment values.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Tap 'Save Adjustment'.", "expected": "Success message appears. Product stock decreases by 2. Adjustment is logged in the stock history.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-019",
+      "title": "Low stock alert is visible for products below reorder level",
+      "description": "Verify products below the reorder level trigger a visible low stock alert.",
+      "priority": "medium",
+      "module": "Inventory",
+      "preconditions": "At least one product has stock below its reorder level.",
+      "expected_result": "Low stock alert is shown in Inventory and Dashboard.",
+      "tags": ["inventory", "alerts", "low-stock"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Products. Find 'Smoke Test Biscuit Pack 200g' (SKU-SMOKE-001). Tap it to open the detail view, then tap 'Edit'. Locate the 'Reorder Level' field and enter 200. Tap 'Save'.", "expected": "Edit form saves successfully. Reorder level is now 200, which is higher than the current stock quantity (which is less than 200 after prior test actions).", "notes": "If the Reorder Level field is not in the product edit form, check Inventory settings for the product instead.", "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Navigate to Inventory.", "expected": "The product shows a 'Low Stock' badge or warning.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Navigate to the Dashboard.", "expected": "The Low Stock count card on the Dashboard reflects at least 1 product.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-020",
+      "title": "Add an expense record",
+      "description": "Verify a retailer can record a business expense.",
+      "priority": "high",
+      "module": "Expenses",
+      "preconditions": "Retailer is logged in. At least one expense category exists.",
+      "expected_result": "Expense is saved and visible in the Expenses list.",
+      "tags": ["expenses", "add"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Expenses from the menu.", "expected": "Expenses list opens.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap 'Add Expense'.", "expected": "Add Expense form opens.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Enter Amount: 500. Select Category: 'Electricity' (or any available). Add Description: 'Monthly electricity bill'. Set Date to today.", "expected": "All fields accept the values.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Tap 'Save'.", "expected": "Expense is saved. It appears in the Expenses list with today's date and ₹500.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-021",
+      "title": "View expenses for the current month",
+      "description": "Verify the expenses list can be filtered by the current month.",
+      "priority": "medium",
+      "module": "Expenses",
+      "preconditions": "At least one expense exists for the current month.",
+      "expected_result": "Only current-month expenses are shown when the month filter is applied.",
+      "tags": ["expenses", "filter"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Expenses and apply the current month date filter.", "expected": "Filter is applied and the list updates.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Verify the expense added in RM-020 appears in the filtered list.", "expected": "The ₹500 electricity expense is visible with today's date.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Verify the total expenses amount shown matches the sum of visible entries.", "expected": "If only the RM-020 expense has been entered this month, the total displays ₹500.00. If additional expenses exist, the total equals the sum of all listed entries. The displayed total must match the manual sum of visible rows — a discrepancy of any amount is a failure.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-022",
+      "title": "Generate Today's Sales Report",
+      "description": "Verify the Sales Report for today generates with accurate totals.",
+      "priority": "critical",
+      "module": "Reports",
+      "preconditions": "At least 2 sales exist for today (from RM-010, RM-011, RM-012).",
+      "expected_result": "Sales report shows today's transactions with correct totals.",
+      "tags": ["reports", "sales", "critical-path"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Reports.", "expected": "Reports screen loads with report type options.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Select 'Sales Report'. Set date range to Today.", "expected": "Report parameters are set.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Tap 'Generate' or 'View Report'.", "expected": "Report loads showing each sale, payment method breakdown, and a grand total.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Verify the grand total matches the sum of sales created during this smoke test session.", "expected": "Grand total = sum of: RM-010 grand total (noted during execution) + RM-011 sale amount (₹56 or ₹56 + tax) + RM-012 discounted total (₹126 or ₹126 + tax). Each individual sale must appear as a separate line in the report. The report total must equal the arithmetic sum of all listed sales — a mismatch of any amount is a failure.", "notes": "Tester must have recorded the grand total from RM-010 Step 5 to perform this verification.", "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-023",
+      "title": "Generate Inventory / Stock Report",
+      "description": "Verify the Inventory Report shows current stock value and quantity.",
+      "priority": "high",
+      "module": "Reports",
+      "preconditions": "Products exist with stock.",
+      "expected_result": "Inventory report lists all products with current quantity and value.",
+      "tags": ["reports", "inventory"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Reports and select 'Inventory Report' or 'Stock Report'.", "expected": "Report type is selected.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap 'Generate Report'.", "expected": "Report shows a table of products with SKU, name, quantity on hand, cost price, and total value.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Verify 'Smoke Test Biscuit Pack 200g' appears with the correct current stock.", "expected": "Product row shows the stock level consistent with previous test actions.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-024",
+      "title": "Generate Profit and Loss Report",
+      "description": "Verify the P&L Report calculates gross profit correctly.",
+      "priority": "high",
+      "module": "Reports",
+      "preconditions": "Sales and purchases exist for the current month.",
+      "expected_result": "P&L report shows revenue, cost of goods, gross profit, and expenses.",
+      "tags": ["reports", "profit-loss", "financial"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Reports and select 'Profit & Loss' or 'P&L Report'.", "expected": "Report type is selected.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Set the date range to the current month and tap 'Generate'.", "expected": "P&L report loads.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Verify that Revenue, COGS, Gross Profit, Expenses, and Net Profit rows are present.", "expected": "All financial rows are present. Net Profit = Gross Profit − Expenses.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-025",
+      "title": "Export a report to PDF or CSV",
+      "description": "Verify the retailer can export a generated report.",
+      "priority": "medium",
+      "module": "Reports",
+      "preconditions": "A Sales Report has been generated.",
+      "expected_result": "Report is exported and the file is accessible.",
+      "tags": ["reports", "export", "pdf", "csv"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Reports. Select 'Sales Report'. Set the date range to Today. Tap 'Generate' or 'View Report'. Wait for the report to finish loading.", "expected": "Sales Report is displayed on screen showing today's transactions. No loading spinner remains. No error message is shown.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap the Export button (PDF or CSV option).", "expected": "Export options appear.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Select PDF export.", "expected": "PDF is generated and the device's share/download dialog appears. File can be saved or shared.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-026",
+      "title": "View current subscription plan details",
+      "description": "Verify the retailer can see their active subscription plan, expiry date, and features.",
+      "priority": "critical",
+      "module": "Subscription",
+      "preconditions": "Retailer has an active subscription.",
+      "expected_result": "Subscription screen shows correct plan name, expiry date, and feature list.",
+      "tags": ["subscription", "plan", "critical-path"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Settings > Subscription or the Subscription screen from the menu.", "expected": "Subscription screen opens.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Verify the current plan name (e.g., 'Basic', 'Pro', 'Enterprise') is displayed.", "expected": "Plan name is clearly labeled.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Verify the subscription expiry date is shown.", "expected": "A future expiry date is displayed (or 'Lifetime' for lifetime plans).", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Review the features listed under the current plan.", "expected": "Feature list matches the plan's documented capabilities.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-027",
+      "title": "Initiate a subscription upgrade via Razorpay",
+      "description": "Verify the subscription upgrade flow initiates a Razorpay payment correctly.",
+      "priority": "critical",
+      "module": "Subscription",
+      "preconditions": "Retailer is on the Basic plan. Internet connectivity is active.",
+      "expected_result": "Razorpay payment sheet opens with the correct amount for the selected plan.",
+      "tags": ["subscription", "upgrade", "razorpay", "critical-path"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to the Subscription screen and tap 'Upgrade Plan' or 'View Plans'.", "expected": "Plan selection screen shows available upgrade options with pricing.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Select the 'Pro' plan (or the next tier above current).", "expected": "Plan details and price are highlighted.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Tap 'Subscribe' or 'Upgrade Now'.", "expected": "The app calls the backend to create a Razorpay order. Razorpay payment sheet opens within 5 seconds.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Verify the Razorpay sheet shows the correct amount matching the selected plan price.", "expected": "Amount in Razorpay equals the displayed plan price. Business name and description are correct.", "notes": "Do NOT complete the payment in smoke test. Only verify the sheet opens correctly.", "automation_selector": null, "automation_action_config": {} },
+        { "order": 5, "action": "Dismiss the Razorpay payment sheet (tap Back or Close).", "expected": "Payment sheet closes. User returns to the plan selection screen without error.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-028",
+      "title": "Complete a Razorpay test payment for subscription",
+      "description": "Verify the end-to-end Razorpay payment flow and post-payment subscription activation.",
+      "priority": "critical",
+      "module": "Payment",
+      "preconditions": "Razorpay test mode is active. Test card details are available. Retailer is on a plan eligible for upgrade.",
+      "expected_result": "Payment succeeds and subscription is activated/upgraded immediately.",
+      "tags": ["payment", "razorpay", "subscription", "critical-path"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Subscription and initiate an upgrade (as in RM-027 steps 1–3).", "expected": "Razorpay payment sheet opens.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Select 'Card' payment method in Razorpay. Enter test card: 4111 1111 1111 1111, Expiry: 12/26, CVV: 123.", "expected": "Card details are accepted.", "notes": "Use Razorpay test credentials only.", "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Tap 'Pay' in the Razorpay sheet.", "expected": "Payment is processed. Razorpay shows a success screen.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Return to the RetailManager app and observe the Subscription screen.", "expected": "Subscription status updates to the new plan immediately (within 10 seconds). Success toast is shown.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 5, "action": "Verify the new plan name and updated expiry date are shown.", "expected": "Plan name reflects the upgraded tier. Expiry date is in the future.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-029",
+      "title": "Verify payment failure is handled gracefully",
+      "description": "Verify that a failed Razorpay payment does not change the subscription status.",
+      "priority": "critical",
+      "module": "Payment",
+      "preconditions": "Retailer is on a plan eligible for upgrade. Razorpay test mode active.",
+      "expected_result": "On payment failure, subscription remains unchanged and an error is shown.",
+      "tags": ["payment", "razorpay", "failure-handling", "critical-path"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Subscription and initiate an upgrade.", "expected": "Razorpay payment sheet opens.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "In Razorpay, use the test failure card: 4000 0000 0000 0002.", "expected": "Card is entered.", "notes": "Razorpay test failure card.", "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Tap 'Pay'.", "expected": "Razorpay shows a payment failed message.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Return to RetailManager and check the Subscription screen.", "expected": "Subscription plan is unchanged. An error or informational message is shown. No partial state is visible.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-030",
+      "title": "Update business information in Settings",
+      "description": "Verify the retailer can update their business name, address, and GST number.",
+      "priority": "high",
+      "module": "Settings",
+      "preconditions": "Retailer is logged in.",
+      "expected_result": "Business information is saved and reflected in invoices.",
+      "tags": ["settings", "business-info"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Settings > Business Information (or Profile Settings).", "expected": "Business info form opens with current values.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Update Business Name to 'Smoke Test Retail Store'. Update Address to '45 Test Street, Test City - 560001'. Update GSTIN to '29TESTG1234F1Z5'.", "expected": "Fields accept the updated values.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Tap 'Save'.", "expected": "Success message appears. Business info is updated.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Create a new sale and view the invoice.", "expected": "Invoice header shows the updated business name and address.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-031",
+      "title": "Configure tax settings (GST rate)",
+      "description": "Verify the retailer can configure the default tax/GST rate.",
+      "priority": "high",
+      "module": "Settings",
+      "preconditions": "Retailer is in Settings.",
+      "expected_result": "Tax rate is saved and applied to new sales.",
+      "tags": ["settings", "tax", "gst"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Settings > Tax Settings.", "expected": "Tax Settings screen opens.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Set the default GST rate to 18%. Tap 'Save'.", "expected": "GST rate is saved. Confirmation is shown.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Create a new sale with one product priced at ₹100. Observe the tax line on the invoice.", "expected": "Tax line shows 18% = ₹18. Grand total = ₹118.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-032",
+      "title": "Back up data to cloud / local storage",
+      "description": "Verify the retailer can initiate a data backup successfully.",
+      "priority": "critical",
+      "module": "Backup & Restore",
+      "preconditions": "Retailer is logged in. Storage permission granted (if applicable).",
+      "expected_result": "Backup completes successfully and a confirmation with timestamp is shown.",
+      "tags": ["backup", "data-safety", "critical-path"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Settings > Backup & Restore.", "expected": "Backup & Restore screen opens showing last backup timestamp.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap 'Backup Now'.", "expected": "Backup progress indicator appears.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Wait for the backup to complete.", "expected": "Success message appears: 'Backup completed successfully'. The last backup timestamp updates to the current date and time.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-033",
+      "title": "Restore data from a backup",
+      "description": "Verify the retailer can restore data from the most recent backup.",
+      "priority": "critical",
+      "module": "Backup & Restore",
+      "preconditions": "At least one backup exists (from RM-032).",
+      "expected_result": "Data is restored from the backup and app data is consistent.",
+      "tags": ["backup", "restore", "data-safety", "critical-path"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Settings > Backup & Restore.", "expected": "The most recent backup is listed with its timestamp.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap 'Restore' next to the most recent backup.", "expected": "A confirmation dialog appears warning that current data may be overwritten.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Confirm the restore.", "expected": "Restore progress is shown. Upon completion, a success message appears.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Navigate to Products and verify the product list matches the backed-up state.", "expected": "'Smoke Test Biscuit Pack 200g' is still present with its correct data.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-034",
+      "title": "Sales session with multiple payment modes (split payment)",
+      "description": "Verify a sale can be completed using split payment (partial cash + partial UPI).",
+      "priority": "high",
+      "module": "Sales",
+      "preconditions": "Retailer is logged in. Product with stock > 0 exists. Split payment feature is enabled in the app (verify in Settings before executing this case — if the feature is disabled or not present, mark this case as Blocked with reason 'Feature not available in current build').",
+      "expected_result": "Sale records both payment amounts and the invoice shows split payment breakdown.",
+      "tags": ["sales", "split-payment", "cash", "upi"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Start a new sale and add a product totalling ₹200.", "expected": "Cart shows ₹200 grand total.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Select 'Split Payment' as the payment method.", "expected": "Split payment mode opens with two or more amount fields for different payment types.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Enter ₹100 for Cash and ₹100 for UPI.", "expected": "Total of both amounts equals ₹200 (the grand total).", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Tap 'Complete Sale'.", "expected": "Sale is saved. Invoice shows ₹100 Cash and ₹100 UPI breakdown.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-035",
+      "title": "Product barcode scan adds item to sale cart",
+      "description": "Verify scanning a product barcode adds it to the sale cart correctly.",
+      "priority": "high",
+      "module": "Sales",
+      "preconditions": "A product with a barcode/SKU exists and has stock. Camera permission is granted.",
+      "expected_result": "Scanned product is added to the cart automatically.",
+      "tags": ["sales", "barcode", "scanner"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Start a new sale.", "expected": "New Sale cart opens.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap the barcode scanner icon in the product search area.", "expected": "Camera opens in barcode scanning mode.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Scan the barcode of a product (or enter the SKU manually if a physical barcode is unavailable).", "expected": "Product is identified. Its name and price appear.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Confirm adding the product to the cart.", "expected": "Product is added to the cart with quantity 1 and correct price.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-036",
+      "title": "Customer credit/due balance is tracked after a credit sale",
+      "description": "Verify that a sale on credit records a due balance against the customer.",
+      "priority": "high",
+      "module": "Customers",
+      "preconditions": "Customer 'Raj Sharma' exists. Credit sale feature is available.",
+      "expected_result": "Customer's outstanding balance is updated after a credit sale.",
+      "tags": ["customers", "credit", "balance"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Start a new sale, add a product totalling ₹150, and select customer 'Raj Sharma'.", "expected": "Customer is linked to the sale.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Select 'Credit' or 'Due' as the payment method.", "expected": "Credit payment is selected. No amount is collected.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Complete the sale.", "expected": "Sale is recorded as a credit sale. Invoice shows 'Due: ₹150'.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Navigate to Customers > 'Raj Sharma' > Outstanding Balance.", "expected": "Balance shows ₹150 due.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-037",
+      "title": "Generate Customers Outstanding Report",
+      "description": "Verify the outstanding balance report lists all customers with pending dues.",
+      "priority": "medium",
+      "module": "Reports",
+      "preconditions": "At least one customer has an outstanding balance (from RM-036).",
+      "expected_result": "Outstanding report lists customers with correct due amounts.",
+      "tags": ["reports", "customers", "outstanding"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Reports and select 'Customers Outstanding' or 'Dues Report'.", "expected": "Report type is selected.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Generate the report.", "expected": "Report lists all customers with a non-zero outstanding balance.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Verify 'Raj Sharma' appears with a due amount of ₹150.", "expected": "Customer row shows ₹150 outstanding.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-038",
+      "title": "Multi-user: verify role-based access for staff",
+      "description": "Verify that a staff user cannot access admin-only features (e.g., Reports, Settings).",
+      "priority": "medium",
+      "module": "Settings",
+      "preconditions": "Retailer is logged in as admin. A staff user account has been created under this business and the staff member's registered phone number is known (required to complete OTP login in Step 1).",
+      "expected_result": "Staff user cannot access restricted sections. Appropriate access-denied message is shown.",
+      "tags": ["settings", "access-control", "multi-user"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Log out of the admin account and log in with a staff user account.", "expected": "Staff user is authenticated and lands on the Dashboard.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Attempt to navigate to Reports.", "expected": "Reports section is either hidden from the menu or shows 'Access Denied / Insufficient Permissions'.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Attempt to navigate to Settings.", "expected": "Settings is restricted. Staff user can only access allowed settings (e.g., profile).", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Verify the staff user can create a sale normally.", "expected": "New Sale flow works without restriction for staff users.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-039",
+      "title": "App functions correctly while offline (no network)",
+      "description": "Verify core sale creation functions offline and syncs when connectivity is restored.",
+      "priority": "critical",
+      "module": "Sales",
+      "preconditions": "App is installed with data preloaded. Device can have network toggled off.",
+      "expected_result": "Sale is created offline and synced to the server when network is restored.",
+      "tags": ["offline", "sync", "resilience"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Disable Wi-Fi and mobile data on the device (Airplane mode or toggle network off).", "expected": "Device has no internet connectivity.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Open RetailManager and navigate to Sales.", "expected": "App opens without crash. An offline indicator may appear.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Create a new sale with an existing product and complete it with cash payment.", "expected": "Sale is saved locally. Confirmation is shown. An 'Offline / Pending Sync' indicator is visible on the sale.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Re-enable network connectivity.", "expected": "App detects the network and syncs the offline sale to the server. The sync indicator disappears.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 5, "action": "Check the sales history.", "expected": "The offline sale now appears in the synced list without duplication.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-041",
+      "title": "First-time retailer onboarding and account creation",
+      "description": "Verify a new retailer can complete the first-launch onboarding flow: register a phone number, set up their business profile, and reach a usable app state.",
+      "priority": "critical",
+      "module": "Authentication",
+      "preconditions": "A fresh device or app installation with no existing account. The phone number being registered has NOT been used before. Internet connectivity is active.",
+      "expected_result": "New retailer account is created, business profile is configured, and the retailer lands on the Dashboard ready to use the app.",
+      "tags": ["onboarding", "registration", "first-launch", "critical-path"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Install and open RetailManager for the first time (or clear app data to simulate a fresh install).", "expected": "App launches to a Welcome or Sign Up screen — not the Dashboard. No pre-filled credentials are visible.", "notes": "Use a test phone number not previously registered in the system.", "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap 'Sign Up' or 'Create Account'. Enter the new retailer's phone number (e.g., +91-8888888888).", "expected": "Phone number is accepted and formatted. A 'Send OTP' or 'Continue' button is enabled.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Tap 'Send OTP'. Check WhatsApp on the device for the OTP message.", "expected": "WhatsApp OTP message arrives within 30 seconds. OTP input screen appears in the app.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Enter the received OTP and tap 'Verify'.", "expected": "OTP is verified. App proceeds to the business setup / onboarding screen.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 5, "action": "Enter the required business details: Business Name: 'New Smoke Retailer', Business Type (select any available option), City: 'Bangalore'.", "expected": "All fields accept the input. A 'Continue' or 'Finish Setup' button becomes active.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 6, "action": "Tap 'Continue' or 'Finish Setup'.", "expected": "Onboarding completes. App navigates to the Dashboard. Business name 'New Smoke Retailer' is visible in the header or profile area.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 7, "action": "Close and reopen the app.", "expected": "App reopens directly to the Dashboard without asking for login again. Session is persisted.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    },
+    {
+      "id": "RM-040",
+      "title": "Logout and session invalidation",
+      "description": "Verify the retailer can log out and the session is properly terminated.",
+      "priority": "critical",
+      "module": "Authentication",
+      "preconditions": "Retailer is logged in.",
+      "expected_result": "Retailer is logged out and the app returns to the Login screen. Re-opening does not restore the session.",
+      "tags": ["logout", "session", "security", "critical-path"],
+      "automation": { "type": "MANUAL", "automation_id": null, "runner": null, "runner_config": {}, "expected_duration_ms": null },
+      "steps": [
+        { "order": 1, "action": "Navigate to Settings or the profile/avatar menu.", "expected": "Settings or Profile screen is visible.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 2, "action": "Tap 'Logout' or 'Sign Out'.", "expected": "A confirmation dialog appears asking the retailer to confirm logout.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 3, "action": "Confirm the logout.", "expected": "App navigates to the Login screen. The retailer's data is no longer visible.", "notes": null, "automation_selector": null, "automation_action_config": {} },
+        { "order": 4, "action": "Close and reopen the app.", "expected": "App opens to the Login screen (not the Dashboard). The previous session is not restored.", "notes": null, "automation_selector": null, "automation_action_config": {} }
+      ]
+    }
+  ]
+}

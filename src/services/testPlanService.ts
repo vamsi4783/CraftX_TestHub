@@ -1,6 +1,36 @@
 import { supabase } from '@/lib/supabase';
 import type { TestPlan, TestPlanCase } from '@/types';
 
+export interface SuiteExportPayload {
+  version: '1.0';
+  metadata: {
+    exported_at: string;
+    source_plan_id: string;
+    source_plan_name: string;
+  };
+  suite: {
+    id: string;
+    name: string;
+    description: null;
+    module: string;
+    version: string;
+    tags: string[];
+    automation: { runner: null; config: Record<string, never> };
+  };
+  test_cases: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    priority: string;
+    module: string;
+    preconditions: string | null;
+    expected_result: string | null;
+    tags: string[];
+    automation: { type: 'MANUAL'; automation_id: null; runner: null; runner_config: Record<string, never>; expected_duration_ms: null };
+    steps: Array<{ order: number; action: string; expected: string; notes: string | null; automation_selector: null; automation_action_config: Record<string, never> }>;
+  }>;
+}
+
 export const testPlanService = {
   async list(projectId: string): Promise<TestPlan[]> {
     const { data, error } = await supabase
@@ -87,5 +117,75 @@ export const testPlanService = {
       .order('order_index');
     if (error) throw error;
     return data as TestPlanCase[];
+  },
+
+  async resetStatus(planId: string): Promise<{ success: boolean; plan_name: string; sessions_reset: number; executions_reset: number }> {
+    const { data, error } = await supabase.functions.invoke('import-test-suite', {
+      body: { action: 'reset', plan_id: planId },
+    });
+    if (error) throw error;
+    if (!data?.success) throw new Error(data?.error ?? 'Reset failed');
+    return data;
+  },
+
+  async getSuiteExportData(planId: string, planName: string, projectId: string): Promise<SuiteExportPayload> {
+    const { data: planCases, error: pcErr } = await supabase
+      .from('test_plan_cases')
+      .select(`
+        order_index,
+        test_case:test_cases(
+          id, test_id, title, description, priority, preconditions, expected_result, tags,
+          module:modules(id, name),
+          steps:test_case_steps(id, step_number, action, expected_result, notes)
+        )
+      `)
+      .eq('plan_id', planId)
+      .order('order_index');
+    if (pcErr) throw pcErr;
+
+    const test_cases = (planCases ?? []).map((pc: any) => {
+      const tc = pc.test_case;
+      const steps = (tc.steps ?? [])
+        .sort((a: any, b: any) => a.step_number - b.step_number)
+        .map((s: any) => ({
+          order: s.step_number,
+          action: s.action ?? '',
+          expected: s.expected_result ?? '',
+          notes: s.notes ?? null,
+          automation_selector: null,
+          automation_action_config: {},
+        }));
+      return {
+        id: tc.test_id,
+        title: tc.title,
+        description: tc.description ?? null,
+        priority: tc.priority,
+        module: tc.module?.name ?? 'General',
+        preconditions: tc.preconditions ?? null,
+        expected_result: tc.expected_result ?? null,
+        tags: tc.tags ?? [],
+        automation: { type: 'MANUAL' as const, automation_id: null, runner: null, runner_config: {}, expected_duration_ms: null },
+        steps,
+      };
+    });
+
+    return {
+      version: '1.0',
+      metadata: {
+        exported_at: new Date().toISOString(),
+        source_plan_id: planId,
+        source_plan_name: planName,
+      },
+      suite: {
+        id: planId,
+        name: planName,
+        description: null,
+        module: 'General',
+        version: '1.0.0',
+        tags: [],
+        automation: { runner: null, config: {} },
+      },
+      test_cases,
+    };
   },
 };

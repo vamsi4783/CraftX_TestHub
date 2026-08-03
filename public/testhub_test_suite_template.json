@@ -1,0 +1,65 @@
+{
+  "version": "1.0",
+  "metadata": {
+    "exported_at": "2026-01-01T00:00:00.000Z",
+    "source_plan_id": "",
+    "source_plan_name": "My Test Suite Template"
+  },
+  "suite": {
+    "id": "SUITE-001",
+    "name": "My Test Suite",
+    "description": null,
+    "module": "General",
+    "version": "1.0.0",
+    "tags": ["smoke", "regression"],
+    "automation": {
+      "runner": null,
+      "config": {}
+    }
+  },
+  "test_cases": [
+    {
+      "id": "TC-001",
+      "title": "Verify user can log in with valid credentials",
+      "description": "Confirm the login flow accepts a registered user and navigates to the home screen.",
+      "priority": "critical",
+      "module": "Authentication",
+      "preconditions": "User account exists. App is installed and network is reachable.",
+      "expected_result": "User is authenticated and lands on the Dashboard screen without errors.",
+      "tags": ["login", "smoke", "critical-path"],
+      "automation": {
+        "type": "MANUAL",
+        "automation_id": null,
+        "runner": null,
+        "runner_config": {},
+        "expected_duration_ms": null
+      },
+      "steps": [
+        {
+          "order": 1,
+          "action": "Open the application on the device.",
+          "expected": "Splash screen appears and the Login screen loads within 3 seconds.",
+          "notes": null,
+          "automation_selector": null,
+          "automation_action_config": {}
+        },
+        {
+          "order": 2,
+          "action": "Enter a registered username and correct password in the respective fields.",
+          "expected": "Input fields accept the text. No validation errors are shown.",
+          "notes": "Use the test account credentials documented in the test data sheet.",
+          "automation_selector": null,
+          "automation_action_config": {}
+        },
+        {
+          "order": 3,
+          "action": "Tap the Login button.",
+          "expected": "Authentication succeeds. App navigates to the Dashboard screen. User's name or avatar is visible in the header.",
+          "notes": null,
+          "automation_selector": null,
+          "automation_action_config": {}
+        }
+      ]
+    }
+  ]
+}
