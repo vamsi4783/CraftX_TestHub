@@ -32,7 +32,7 @@ Fill in your Supabase URL and anon key from **Project Settings → API**.
 ```bash
 npm run dev
 ```
-Open [http://localhost:5173](http://localhost:5173)
+Open [http://localhost:5173](http://localhost:5174)
 
 ### 5. First Login
 1. Go to **Authentication → Users** in Supabase dashboard
