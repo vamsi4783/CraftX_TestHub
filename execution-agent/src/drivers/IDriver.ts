@@ -28,9 +28,13 @@ export interface ActionResult {
 export interface IDriver {
   readonly id: string;
   readonly manifest: DriverManifest;
+  /** One-time setup (allocate resources, validate config). Called before connect(). */
+  initialize?(): Promise<void>;
   connect(config: Record<string, unknown>): Promise<void>;
   disconnect(): Promise<void>;
   /** Core single-dispatch method. DriverHost calls this — never call directly. */
   execute(request: ActionRequest): Promise<ActionResult>;
   isConnected(): boolean;
+  /** Tear-down: disconnect if connected, then release all resources. */
+  dispose?(): Promise<void>;
 }

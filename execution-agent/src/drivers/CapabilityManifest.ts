@@ -17,6 +17,9 @@ export type Capability =
   | 'logcat_capture'
   | 'crash_detection'
   | 'anr_detection'
+  | 'press_back'
+  | 'install_apk'
+  | 'uninstall_apk'
   // Chrome-specific
   | 'navigate'
   | 'click'
@@ -24,6 +27,9 @@ export type Capability =
   | 'scroll'
   | 'wait_for_selector'
   | 'assert_text'
+  | 'fill'
+  | 'evaluate'
+  | 'wait'
   // Shared advanced
   | 'accessibility_tree'
   // Phase 6+ — declared now so manifests are forward-compatible
@@ -32,6 +38,9 @@ export type Capability =
   | 'video_capture'
   | 'network_intercept';
 
+/** Platform a driver targets. Used in DriverManifest.platforms. */
+export type Platform = 'android' | 'chromium' | 'webkit' | 'firefox' | 'all';
+
 export interface DriverManifest {
   driver_id: string;
   driver_name: string;
@@ -39,4 +48,9 @@ export interface DriverManifest {
   capabilities: Set<Capability>;
   /** JSON Schema for the connect() config object. */
   config_schema: Record<string, unknown>;
+  /** Platforms this driver targets. Optional for backwards-compat with M3 manifests. */
+  platforms?: Platform[];
+  /** Semver ranges of agent versions this driver is compatible with. */
+  agent_compatibility?: string[];
+  description?: string;
 }
