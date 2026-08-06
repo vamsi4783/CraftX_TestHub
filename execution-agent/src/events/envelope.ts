@@ -1,6 +1,9 @@
-// ─── CQRS Event + Command Envelopes ─────────────────────────────────────────
+// ─── CQRS Event + Command Envelopes ──────────────────────────────────────────
 // V5 Phase 3 required schema. Every field is mandatory.
 // Rule: events are past-tense facts; commands are future-tense intents.
+
+import { uuidv7 } from 'uuidv7';
+import { randomUUID } from 'crypto';
 
 export interface EventEnvelope<P = unknown> {
   /** UUID v7 — time-ordered for natural Event Store sorting. */
@@ -69,4 +72,53 @@ export interface AutomationConfig {
   value?: string;
   timeout_ms?: number;
   params?: Record<string, unknown>;
+}
+
+// ─── Builder Helpers ─────────────────────────────────────────────────────────
+// Convenience functions for constructing valid envelopes with generated IDs.
+
+export interface BuildEnvelopeParams<P> {
+  event_type:     string;
+  schema_version?: number;
+  /** Defaults to the generated event_id (self-caused / root event). */
+  causation_id?:  string;
+  correlation_id: string;
+  org_id:         string;
+  agent_id:       string;
+  sequence:       number;
+  payload:        P;
+}
+
+export function buildEnvelope<P>(params: BuildEnvelopeParams<P>): EventEnvelope<P> {
+  const event_id = uuidv7();
+  return {
+    event_id,
+    event_type:     params.event_type,
+    schema_version: params.schema_version ?? 1,
+    causation_id:   params.causation_id ?? event_id,
+    correlation_id: params.correlation_id,
+    org_id:         params.org_id,
+    agent_id:       params.agent_id,
+    occurred_at:    new Date().toISOString(),
+    sequence:       params.sequence,
+    payload:        params.payload,
+  };
+}
+
+export interface BuildCommandParams<P> {
+  command_type:   string;
+  correlation_id: string;
+  org_id:         string;
+  payload:        P;
+}
+
+export function buildCommand<P>(params: BuildCommandParams<P>): CommandEnvelope<P> {
+  return {
+    command_id:     randomUUID(),
+    command_type:   params.command_type,
+    correlation_id: params.correlation_id,
+    org_id:         params.org_id,
+    issued_at:      new Date().toISOString(),
+    payload:        params.payload,
+  };
 }

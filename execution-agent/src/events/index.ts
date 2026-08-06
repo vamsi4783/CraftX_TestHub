@@ -6,7 +6,32 @@ export type {
   ExecuteStepPayload,
   PauseSessionPayload,
   CancelExecutionPayload,
+  BuildEnvelopeParams,
+  BuildCommandParams,
 } from './envelope.js';
+export { buildEnvelope, buildCommand } from './envelope.js';
+
+export type { ValidationResult, ValidationError } from './ValidationResult.js';
+export { validOk, validFail, validFailField }     from './ValidationResult.js';
+
+export type { EventDefinition } from './EventDefinition.js';
+export { JsonEventDefinition }  from './EventDefinition.js';
+
+export {
+  EventRegistry,
+  DuplicateEventDefinitionError,
+  UnknownEventError,
+  EventValidationError,
+} from './EventRegistry.js';
+
+export { EnvelopeValidator } from './EnvelopeValidator.js';
+
+export type {
+  ReplayCursor,
+  ReplayOptions,
+  ReplayResult,
+  IReplayableEventStore,
+} from './replay/ReplayTypes.js';
 
 export type {
   ExecutionStartedPayload,
