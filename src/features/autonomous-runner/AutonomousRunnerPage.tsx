@@ -37,10 +37,10 @@ async function fetchSteps(testCaseId: string): Promise<TestCaseStep[]> {
 async function fetchTestCaseName(testCaseId: string): Promise<string> {
   const { data } = await supabase
     .from('test_cases')
-    .select('name')
+    .select('title')
     .eq('id', testCaseId)
     .single();
-  return (data as { name?: string } | null)?.name ?? 'Test Case';
+  return (data as { title?: string } | null)?.title ?? 'Test Case';
 }
 
 // ─── Mode options ─────────────────────────────────────────────────────────────
