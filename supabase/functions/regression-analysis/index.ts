@@ -10,7 +10,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const MODEL      = 'claude-sonnet-5-20251101';
+const MODEL      = 'claude-sonnet-5';
 const MAX_TOKENS = 4096;
 
 interface RegressionInsight {
