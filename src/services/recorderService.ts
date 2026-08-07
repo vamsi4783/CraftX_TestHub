@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { RecordingSession, TimelineEvent, ScreenshotRecord } from '@/features/recorder/types';
+import type { RecordedStep } from '@/features/recorder/recorderTypes';
 
 export const recorderService = {
   // ── Create ──────────────────────────────────────────────────────────────────
@@ -166,5 +167,48 @@ export const recorderService = {
       .limit(50);
     if (error) throw error;
     return data ?? [];
+  },
+
+  // ── Automation steps (M2) ─────────────────────────────────────────────────
+
+  async bulkSaveAutomationSteps(recordingId: string, steps: RecordedStep[]): Promise<void> {
+    if (steps.length === 0) return;
+    const { error } = await supabase.from('recording_automation_steps').insert(
+      steps.map((s, i) => ({
+        recording_id:   recordingId,
+        step_order:     i,
+        schema_version: s.schema_version,
+        driver_id:      s.driver,
+        action:         s.action,
+        params:         s.params,
+        metadata:       s.metadata,
+      }))
+    );
+    if (error) throw error;
+  },
+
+  async getAutomationSteps(recordingId: string): Promise<RecordedStep[]> {
+    const { data, error } = await supabase
+      .from('recording_automation_steps')
+      .select('*')
+      .eq('recording_id', recordingId)
+      .order('step_order', { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map(row => ({
+      id:             row.id as string,
+      schema_version: row.schema_version as '1.0',
+      driver:         row.driver_id as RecordedStep['driver'],
+      action:         row.action as RecordedStep['action'],
+      params:         row.params as RecordedStep['params'],
+      metadata:       row.metadata as RecordedStep['metadata'],
+    }));
+  },
+
+  async deleteAutomationStep(stepId: string): Promise<void> {
+    const { error } = await supabase
+      .from('recording_automation_steps')
+      .delete()
+      .eq('id', stepId);
+    if (error) throw error;
   },
 };

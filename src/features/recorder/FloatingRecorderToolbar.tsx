@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Box, Paper, IconButton, Typography, Tooltip, CircularProgress,
-  Fade, Chip, Collapse,
+  Fade, Chip, Collapse, Button,
 } from '@mui/material';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import PauseIcon              from '@mui/icons-material/Pause';
@@ -13,8 +13,15 @@ import StorageIcon            from '@mui/icons-material/Storage';
 import CameraAltIcon          from '@mui/icons-material/CameraAlt';
 import CheckCircleIcon        from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon       from '@mui/icons-material/ErrorOutline';
+import AddCircleOutlineIcon   from '@mui/icons-material/AddCircleOutline';
+import RateReviewIcon         from '@mui/icons-material/RateReview';
 import { useRecorderContext }  from './RecorderContext';
+import { useAutomationRecorder } from './useAutomationRecorder';
+import { RecordActionDialog }  from './RecordActionDialog';
+import { ReviewScreen }        from './ReviewScreen';
+import { useAuth }             from '@/hooks/useAuth';
 import type { RecordingState } from './types';
+import type { RecordableDriver, RecordableAction, RecordedParams } from './recorderTypes';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -86,13 +93,22 @@ function borderColor(state: RecordingState): string {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function FloatingRecorderToolbar() {
+export function FloatingRecorderToolbar({ projectId = '' }: { projectId?: string }) {
   const {
     state, session, elapsedMs, runnerStatus, storageEstimate,
     startRecording, pause, resume, stop, cancel, reset, captureScreenshot,
   } = useRecorderContext();
 
-  const [confirmCancel, setConfirmCancel] = useState(false);
+  const { profile } = useAuth();
+  const automationRecorder = useAutomationRecorder(profile?.id ?? 'unknown');
+
+  const [confirmCancel,  setConfirmCancel]  = useState(false);
+  const [logActionOpen,  setLogActionOpen]  = useState(false);
+  const [reviewOpen,     setReviewOpen]     = useState(false);
+
+  const handleLogAction = (driver: RecordableDriver, action: RecordableAction, params: RecordedParams) => {
+    automationRecorder.record(driver, action, params);
+  };
 
   const visible = state !== 'IDLE' && state !== 'CANCELLED';
 
@@ -106,6 +122,7 @@ export function FloatingRecorderToolbar() {
   const badge = STATE_BADGE[state];
 
   return (
+    <>
     <Fade in={visible} unmountOnExit>
       <Paper
         elevation={10}
@@ -240,9 +257,21 @@ export function FloatingRecorderToolbar() {
             <Box display="flex" alignItems="center" gap={1.5}>
               <CheckCircleIcon sx={{ color: '#10B981', fontSize: 20 }} />
               <Typography variant="body2" fontWeight={600} color="success.main" flex={1}>
-                Recording saved successfully.
+                Recording saved.
+                {automationRecorder.stepCount > 0 && ` ${automationRecorder.stepCount} step${automationRecorder.stepCount !== 1 ? 's' : ''} recorded.`}
               </Typography>
-              <Chip label="Dismiss" size="small" clickable onClick={reset} sx={{ fontWeight: 700 }} />
+              {automationRecorder.stepCount > 0 && (
+                <Chip
+                  label="Review Steps"
+                  icon={<RateReviewIcon sx={{ fontSize: 14 }} />}
+                  size="small"
+                  color="primary"
+                  clickable
+                  onClick={() => setReviewOpen(true)}
+                  sx={{ fontWeight: 700 }}
+                />
+              )}
+              <Chip label="Dismiss" size="small" clickable onClick={() => { reset(); automationRecorder.clear(); }} sx={{ fontWeight: 700 }} />
             </Box>
           )}
 
@@ -322,6 +351,26 @@ export function FloatingRecorderToolbar() {
                 </Tooltip>
               )}
 
+              {/* ➕ Log Action — when RECORDING or PAUSED */}
+              {(isRecording || isPaused) && (
+                <Tooltip title={`Log action · ${automationRecorder.stepCount} logged`}>
+                  <Box display="flex" alignItems="center">
+                    <IconButton
+                      onClick={() => setLogActionOpen(true)}
+                      size="small"
+                      sx={{ color: '#4F46E5', '&:hover': { bgcolor: 'rgba(79,70,229,0.1)' } }}
+                    >
+                      <AddCircleOutlineIcon sx={{ fontSize: 19 }} />
+                    </IconButton>
+                    {automationRecorder.stepCount > 0 && (
+                      <Typography variant="caption" fontWeight={700} color="primary" sx={{ ml: -0.5 }}>
+                        {automationRecorder.stepCount}
+                      </Typography>
+                    )}
+                  </Box>
+                </Tooltip>
+              )}
+
               {/* ■ Stop — when RECORDING or PAUSED */}
               {(isRecording || isPaused) && (
                 <Tooltip title="Stop — saves all data">
@@ -367,5 +416,24 @@ export function FloatingRecorderToolbar() {
         </Box>
       </Paper>
     </Fade>
+
+    <RecordActionDialog
+      open={logActionOpen}
+      onClose={() => setLogActionOpen(false)}
+      onLog={handleLogAction}
+    />
+
+    <ReviewScreen
+      open={reviewOpen}
+      onClose={() => setReviewOpen(false)}
+      steps={automationRecorder.steps}
+      recordingId={session?.id ?? null}
+      projectId={projectId}
+      onRemoveStep={automationRecorder.removeStep}
+      onUpdateParams={automationRecorder.updateParams}
+      onReorder={automationRecorder.reorder}
+      onClear={automationRecorder.clear}
+    />
+    </>
   );
 }
