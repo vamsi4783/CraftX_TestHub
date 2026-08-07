@@ -31,6 +31,7 @@ import { UsersPage } from '@/features/users/UsersPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { NotificationsPage } from '@/features/notifications/NotificationsPage';
 import { AgentPage } from '@/features/agent/AgentPage';
+import { AutonomousRunnerPage } from '@/features/autonomous-runner';
 
 // My Tests page (inline)
 import { useQuery } from '@tanstack/react-query';
@@ -155,6 +156,7 @@ export const router = createBrowserRouter([
       { path: 'releases/:id',        element: <P><ReleaseDetailPage /></P> },
       { path: 'test-cases',                    element: <P><TestCasesPage /></P> },
       { path: 'test-cases/:id',               element: <P><TestCaseDetailPage /></P> },
+      { path: 'test-cases/:id/run',           element: <P><AutonomousRunnerPage /></P> },
       { path: 'my-tests',                      element: <P><MyTestsPage /></P> },
       { path: 'test-execution/:id',            element: <P><TestExecutionPage /></P> },
       { path: 'test-plans',                    element: <P><TestPlansPage /></P> },

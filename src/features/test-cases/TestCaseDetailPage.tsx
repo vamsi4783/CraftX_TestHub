@@ -7,7 +7,8 @@ import {
   Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControl,
   InputLabel, MenuItem, Select, CircularProgress, Alert, Tooltip,
 } from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
+import EditIcon        from '@mui/icons-material/Edit';
+import PlayArrowIcon   from '@mui/icons-material/PlayArrow';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -241,16 +242,29 @@ export function TestCaseDetailPage() {
         ]}
         showBack
         actions={
-          canManage ? (
+          (
             <Stack direction="row" spacing={1}>
-              <Button variant="outlined" size="small" startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>
-                Edit
-              </Button>
-              <Button variant="contained" size="small" startIcon={<EditIcon />} onClick={() => setStepsOpen(true)}>
-                Edit Steps
+              {canManage && (
+                <>
+                  <Button variant="outlined" size="small" startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>
+                    Edit
+                  </Button>
+                  <Button variant="outlined" size="small" startIcon={<EditIcon />} onClick={() => setStepsOpen(true)}>
+                    Edit Steps
+                  </Button>
+                </>
+              )}
+              <Button
+                variant="contained"
+                size="small"
+                color="success"
+                startIcon={<PlayArrowIcon />}
+                onClick={() => navigate(`/test-cases/${tc.id}/run`)}
+              >
+                Run Automation
               </Button>
             </Stack>
-          ) : undefined
+          )
         }
       />
 
