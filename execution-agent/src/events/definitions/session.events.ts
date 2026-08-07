@@ -19,3 +19,14 @@ export interface ExecutionCancelledPayload {
   cancelled_by: string;  // agent_id or user_id
   reason: string;
 }
+
+export interface ExecutionFailedPayload {
+  session_id: string;
+  failed_step_id: string;
+  failed_step_number: number;
+  failure_reason: string;
+  total_steps: number;
+  passed: number;
+  failed: number;
+  duration_ms: number;
+}
