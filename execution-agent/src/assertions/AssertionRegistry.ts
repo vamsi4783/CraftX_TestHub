@@ -24,6 +24,10 @@ import { WaitUntilAssertionHandler }         from './handlers/common/WaitUntilAs
 import { ValueEqualsAssertionHandler }       from './handlers/common/ValueEqualsAssertionHandler.js';
 import { RegexMatchAssertionHandler }        from './handlers/common/RegexMatchAssertionHandler.js';
 
+// Visual (M5)
+import { VisualMatchAssertionHandler }       from '../visual/handlers/VisualMatchAssertionHandler.js';
+import { InMemoryBaselineStore }             from '../visual/BaselineStore.js';
+
 // ─── Registry ─────────────────────────────────────────────────────────────────
 
 export class AssertionRegistry {
@@ -82,6 +86,8 @@ export class AssertionRegistry {
       new WaitUntilAssertionHandler(),
       new ValueEqualsAssertionHandler(),
       new RegexMatchAssertionHandler(),
+      // Visual (M5)
+      new VisualMatchAssertionHandler(new InMemoryBaselineStore()),
     ];
 
     for (const h of builtins) {

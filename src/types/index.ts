@@ -146,7 +146,7 @@ export type AutomationDriverId = 'android' | 'browser';
 export type AssertionTypeLegacy =
   | 'text_present' | 'element_visible' | 'package' | 'activity' | 'screenshot';
 
-/** M4 — full assertion kind set matching AssertionEngine */
+/** M4 + M5 — full assertion kind set matching AssertionEngine */
 export type AssertionType =
   // Android
   | 'assert_activity'
@@ -163,7 +163,16 @@ export type AssertionType =
   // Common
   | 'assert_wait_until'
   | 'assert_value_equals'
-  | 'assert_regex_match';
+  | 'assert_regex_match'
+  // Visual (M5)
+  | 'assert_visual_match';
+
+export type VisualComparisonMode =
+  | 'exact'
+  | 'pixel_tolerance'
+  | 'percentage_difference'
+  | 'ignore_regions'
+  | 'resolution_normalization';
 
 export interface AutomationParams {
   // tap / assertion element target
@@ -176,7 +185,7 @@ export interface AutomationParams {
   value?: string;
   // wait or swipe gesture duration
   duration_ms?: number;
-  // assertion (M4)
+  // assertion (M4 + M5)
   assertion_kind?: AssertionType;
   expected?: string;
   selector?: string;
@@ -184,6 +193,13 @@ export interface AutomationParams {
   regex?: string;
   negate?: boolean;
   poll_interval_ms?: number;
+  // visual (M5)
+  baseline_id?: string;
+  visual_mode?: VisualComparisonMode;
+  tolerance?: number;
+  threshold?: number;
+  ignore_regions?: Array<{ x: number; y: number; width: number; height: number; label?: string }>;
+  capture_baseline?: boolean;
   // press_key
   key?: string;
   // per-step timeout override

@@ -18,8 +18,12 @@ describe('AssertionRegistry — built-in registration', () => {
   let registry: AssertionRegistry;
   beforeEach(() => { registry = new AssertionRegistry(); });
 
-  it('registers all 13 built-in handlers', () => {
-    expect(registry.list()).toHaveLength(13);
+  it('registers all 14 built-in handlers (13 M4 + 1 M5 visual)', () => {
+    expect(registry.list()).toHaveLength(14);
+  });
+
+  it('has M5 visual handler', () => {
+    expect(registry.has('assert_visual_match')).toBe(true);
   });
 
   it('has all Android handlers', () => {

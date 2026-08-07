@@ -52,9 +52,9 @@ const ACTION_META: Record<AutomationAction, ActionMeta> = {
 interface AssertionMeta {
   value:   AssertionType;
   label:   string;
-  group:   'Android' | 'Chrome' | 'Common';
+  group:   'Android' | 'Chrome' | 'Common' | 'Visual';
   /** Fields this assertion type needs */
-  fields:  ('expected' | 'selector' | 'attribute' | 'regex' | 'value' | 'timeout' | 'poll_interval' | 'negate')[];
+  fields:  ('expected' | 'selector' | 'attribute' | 'regex' | 'value' | 'timeout' | 'poll_interval' | 'negate' | 'visual')[];
 }
 
 const ASSERTION_TYPES: AssertionMeta[] = [
@@ -74,6 +74,8 @@ const ASSERTION_TYPES: AssertionMeta[] = [
   { value: 'assert_wait_until',      label: 'Wait until text appears',       group: 'Common', fields: ['expected', 'timeout', 'poll_interval', 'negate'] },
   { value: 'assert_value_equals',    label: 'Value equals (exact)',          group: 'Common', fields: ['expected', 'value', 'negate'] },
   { value: 'assert_regex_match',     label: 'Value matches regex',           group: 'Common', fields: ['regex', 'value', 'negate'] },
+  // Visual (M5)
+  { value: 'assert_visual_match',    label: 'Visual match (screenshot)',     group: 'Visual',  fields: ['visual', 'negate'] },
 ];
 
 const ASSERTION_META: Record<AssertionType, AssertionMeta> =
@@ -165,7 +167,7 @@ function ParamFields({ config, onChange }: {
       const fields = meta?.fields ?? [];
 
       // Group assertions for the dropdown
-      const groups = ['Android', 'Chrome', 'Common'] as const;
+      const groups = ['Android', 'Chrome', 'Common', 'Visual'] as const;
 
       return (
         <Box display="flex" flexDirection="column" gap={1.5}>
@@ -261,6 +263,54 @@ function ParamFields({ config, onChange }: {
                 />
               )}
             </Stack>
+          )}
+
+          {fields.includes('visual') && (
+            <Box display="flex" flexDirection="column" gap={1.5}>
+              <TextField label="Baseline ID" size="small" fullWidth
+                value={p.baseline_id ?? ''}
+                onChange={e => set({ baseline_id: e.target.value })}
+                placeholder="e.g. login-screen (leave blank to use step ID)"
+                helperText="Stable key for the stored baseline image"
+              />
+              <FormControl fullWidth size="small">
+                <InputLabel>Comparison mode</InputLabel>
+                <Select
+                  label="Comparison mode"
+                  value={p.visual_mode ?? 'exact'}
+                  onChange={e => set({ visual_mode: e.target.value as import('@/types').VisualComparisonMode })}
+                >
+                  <MenuItem value="exact">Exact match (pixel-perfect)</MenuItem>
+                  <MenuItem value="pixel_tolerance">Pixel tolerance (per-channel diff)</MenuItem>
+                  <MenuItem value="percentage_difference">Percentage difference</MenuItem>
+                  <MenuItem value="ignore_regions">Ignore regions</MenuItem>
+                  <MenuItem value="resolution_normalization">Resolution normalization</MenuItem>
+                </Select>
+              </FormControl>
+              {(p.visual_mode === 'pixel_tolerance' || !p.visual_mode) && (
+                <TextField label="Tolerance (0–255 per channel)" type="number" size="small"
+                  value={p.tolerance ?? 0}
+                  onChange={e => set({ tolerance: Number(e.target.value) })}
+                  inputProps={{ min: 0, max: 255, step: 1 }}
+                  helperText="Per-pixel colour difference allowed per channel"
+                />
+              )}
+              <TextField label="Threshold (% pixels allowed to differ)" type="number" size="small"
+                value={p.threshold ?? 0}
+                onChange={e => set({ threshold: Number(e.target.value) })}
+                inputProps={{ min: 0, max: 100, step: 0.1 }}
+                helperText="0 = exact; 5 = allow up to 5% pixels to differ"
+              />
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <input type="checkbox" id="capture-baseline-cb"
+                  checked={!!p.capture_baseline}
+                  onChange={e => set({ capture_baseline: e.target.checked })}
+                />
+                <Typography component="label" htmlFor="capture-baseline-cb" variant="body2" sx={{ cursor: 'pointer' }}>
+                  Capture / replace baseline on next run
+                </Typography>
+              </Stack>
+            </Box>
           )}
 
           {fields.includes('negate') && (

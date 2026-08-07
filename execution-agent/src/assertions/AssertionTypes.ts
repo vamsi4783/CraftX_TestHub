@@ -24,10 +24,14 @@ export type CommonAssertionKind =
   | 'assert_value_equals'
   | 'assert_regex_match';
 
+/** M5 — visual comparison assertion. */
+export type VisualAssertionKind = 'assert_visual_match';
+
 export type AssertionKind =
   | AndroidAssertionKind
   | ChromeAssertionKind
-  | CommonAssertionKind;
+  | CommonAssertionKind
+  | VisualAssertionKind;
 
 // ─── Assertion status ─────────────────────────────────────────────────────────
 

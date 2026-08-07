@@ -83,6 +83,7 @@ describe('AutomationConfigEditor — assertion action renders', () => {
       'Wait until text appears',
       'Value equals (exact)',
       'Value matches regex',
+      'Visual match (screenshot)',
     ];
 
     for (const label of expectedKinds) {
@@ -109,6 +110,13 @@ describe('AutomationConfigEditor — assertion action renders', () => {
     const select = screen.getByRole('combobox', { hidden: true });
     fireEvent.mouseDown(select.closest('[role="button"]') ?? select);
     expect(screen.getByText('— Common —')).toBeTruthy();
+  });
+
+  it('shows Visual group label', () => {
+    renderEditor();
+    const select = screen.getByRole('combobox', { hidden: true });
+    fireEvent.mouseDown(select.closest('[role="button"]') ?? select);
+    expect(screen.getByText('— Visual —')).toBeTruthy();
   });
 });
 
@@ -175,6 +183,13 @@ describe('AutomationConfigEditor — assertion field rendering', () => {
     const checkbox = screen.getByRole('checkbox');
     expect(checkbox).toBeTruthy();
     expect(screen.getByText(/negate/i)).toBeTruthy();
+  });
+
+  it('assert_visual_match: shows baseline ID, mode, threshold, and capture checkbox', () => {
+    renderWithKind('assert_visual_match');
+    expect(screen.getAllByText(/baseline/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/threshold/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/capture/i).length).toBeGreaterThan(0);
   });
 });
 
