@@ -35,6 +35,7 @@ import { AutonomousRunnerPage } from '@/features/autonomous-runner';
 import { AITestGeneratorPage }  from '@/features/ai-test-generator/AITestGeneratorPage';
 import { HealingReviewPage }      from '@/features/healing-review/HealingReviewPage';
 import { FailureAnalysisPage }    from '@/features/failure-analysis/FailureAnalysisPage';
+import { RegressionDashboard }    from '@/features/regression-analysis/RegressionDashboard';
 
 // My Tests page (inline)
 import { useQuery } from '@tanstack/react-query';
@@ -185,6 +186,7 @@ export const router = createBrowserRouter([
       { path: 'ai-test-generator',   element: <P><AITestGeneratorPage /></P> },
       { path: 'healing-review',       element: <P><HealingReviewPage /></P> },
       { path: 'failure-analysis',    element: <P><FailureAnalysisPage /></P> },
+      { path: 'regression-analysis', element: <P><RegressionDashboard /></P> },
     ],
   },
   { path: '*', element: <Navigate to="/dashboard" replace /> },

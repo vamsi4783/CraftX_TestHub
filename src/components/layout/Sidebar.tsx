@@ -26,6 +26,7 @@ import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import SmartToyIcon     from '@mui/icons-material/SmartToy';
 import AutoAwesomeIcon  from '@mui/icons-material/AutoAwesome';
 import AutoFixHighIcon  from '@mui/icons-material/AutoFixHigh';
+import TrendingUpIcon   from '@mui/icons-material/TrendingUp';
 import { useAuth } from '@/hooks/useAuth';
 import { getInitials } from '@/lib/utils';
 
@@ -62,6 +63,7 @@ const NAV: NavItem[] = [
   { label: 'AI Test Generator', path: '/ai-test-generator', icon: <AutoAwesomeIcon /> },
   { label: 'Healing Review',    path: '/healing-review',    icon: <AutoFixHighIcon /> },
   { label: 'Failure Analysis',  path: '/failure-analysis',  icon: <BugReportIcon /> },
+  { label: 'Regression Analysis', path: '/regression-analysis', icon: <TrendingUpIcon /> },
   { label: 'Settings',         path: '/settings',     icon: <SettingsIcon /> },
 ];
 
