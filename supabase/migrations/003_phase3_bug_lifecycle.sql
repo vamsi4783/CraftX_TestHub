@@ -1,10 +1,10 @@
 -- ============================================================
 -- Phase 3: Bug Lifecycle, Release Management & QA Workflow
+-- FIX: update_updated_at_column → update_updated_at
+-- FIX: explicit ::text casts for enum values in bug_history inserts
 -- ============================================================
 
--- -------------------------------------------------------
--- 1. Extend bugs table with new columns
--- -------------------------------------------------------
+-- 1. Extend bugs table
 ALTER TABLE bugs
   ADD COLUMN IF NOT EXISTS browser            TEXT,
   ADD COLUMN IF NOT EXISTS root_cause         TEXT,
@@ -18,7 +18,8 @@ ALTER TABLE bugs
   ADD COLUMN IF NOT EXISTS test_session_id    UUID REFERENCES test_sessions(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS retested_by        UUID REFERENCES profiles(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS retested_at        TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS watcher_count      INTEGER DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS watcher_count      INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS updated_by         UUID REFERENCES profiles(id) ON DELETE SET NULL;
 
 -- Drop old status check constraint and add extended one
 DO $$
@@ -39,9 +40,7 @@ ALTER TABLE bugs
     'rejected','duplicate','cannot_reproduce','wont_fix'
   ));
 
--- -------------------------------------------------------
 -- 2. bug_relationships
--- -------------------------------------------------------
 CREATE TABLE IF NOT EXISTS bug_relationships (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   bug_id          UUID NOT NULL REFERENCES bugs(id) ON DELETE CASCADE,
@@ -52,9 +51,7 @@ CREATE TABLE IF NOT EXISTS bug_relationships (
   UNIQUE (bug_id, related_bug_id, relationship)
 );
 
--- -------------------------------------------------------
 -- 3. bug_watchers
--- -------------------------------------------------------
 CREATE TABLE IF NOT EXISTS bug_watchers (
   id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   bug_id     UUID NOT NULL REFERENCES bugs(id) ON DELETE CASCADE,
@@ -63,9 +60,7 @@ CREATE TABLE IF NOT EXISTS bug_watchers (
   UNIQUE (bug_id, user_id)
 );
 
--- -------------------------------------------------------
 -- 4. bug_attachments
--- -------------------------------------------------------
 CREATE TABLE IF NOT EXISTS bug_attachments (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   bug_id       UUID NOT NULL REFERENCES bugs(id) ON DELETE CASCADE,
@@ -78,9 +73,7 @@ CREATE TABLE IF NOT EXISTS bug_attachments (
   created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
--- -------------------------------------------------------
 -- 5. release_builds
--- -------------------------------------------------------
 CREATE TABLE IF NOT EXISTS release_builds (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   release_id   UUID NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
@@ -97,9 +90,7 @@ CREATE TABLE IF NOT EXISTS release_builds (
   created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
--- -------------------------------------------------------
--- 6. release_documents
--- -------------------------------------------------------
+-- 6. release_documents (extended)
 CREATE TABLE IF NOT EXISTS release_documents (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   release_id   UUID NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
@@ -115,9 +106,7 @@ CREATE TABLE IF NOT EXISTS release_documents (
   updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
--- -------------------------------------------------------
--- 7. qa_approvals (one per release, upserted)
--- -------------------------------------------------------
+-- 7. qa_approvals
 CREATE TABLE IF NOT EXISTS qa_approvals (
   id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   release_id            UUID NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
@@ -140,9 +129,7 @@ CREATE TABLE IF NOT EXISTS qa_approvals (
   UNIQUE (release_id)
 );
 
--- -------------------------------------------------------
 -- 8. Indexes
--- -------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_bug_relationships_bug    ON bug_relationships(bug_id);
 CREATE INDEX IF NOT EXISTS idx_bug_watchers_bug         ON bug_watchers(bug_id);
 CREATE INDEX IF NOT EXISTS idx_bug_watchers_user        ON bug_watchers(user_id);
@@ -151,15 +138,13 @@ CREATE INDEX IF NOT EXISTS idx_release_builds_release   ON release_builds(releas
 CREATE INDEX IF NOT EXISTS idx_release_docs_release     ON release_documents(release_id);
 CREATE INDEX IF NOT EXISTS idx_qa_approvals_release     ON qa_approvals(release_id);
 
--- -------------------------------------------------------
--- 9. Triggers
--- -------------------------------------------------------
+-- 9. Triggers (FIXED: update_updated_at not update_updated_at_column)
 CREATE TRIGGER set_updated_at_release_docs
-  BEFORE UPDATE ON release_documents FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  BEFORE UPDATE ON release_documents FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER set_updated_at_qa_approvals
-  BEFORE UPDATE ON qa_approvals FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  BEFORE UPDATE ON qa_approvals FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
--- Auto-set closed_at when status changes to closed
+-- Auto-set closed_at
 CREATE OR REPLACE FUNCTION set_bug_closed_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -179,22 +164,21 @@ CREATE TRIGGER trg_bug_closed_at
   WHEN (OLD.status IS DISTINCT FROM NEW.status)
   EXECUTE FUNCTION set_bug_closed_at();
 
--- Auto-record bug_history on any field change
+-- Auto-record bug_history (FIXED: explicit ::text casts for enum columns)
 CREATE OR REPLACE FUNCTION auto_log_bug_history()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- Log status changes
   IF OLD.status IS DISTINCT FROM NEW.status THEN
     INSERT INTO bug_history(bug_id, changed_by, field_name, old_value, new_value)
-    VALUES (NEW.id, COALESCE(NEW.updated_by, NEW.reported_by), 'status', OLD.status, NEW.status);
+    VALUES (NEW.id, COALESCE(NEW.updated_by, NEW.reported_by), 'status', OLD.status::text, NEW.status::text);
   END IF;
   IF OLD.severity IS DISTINCT FROM NEW.severity THEN
     INSERT INTO bug_history(bug_id, changed_by, field_name, old_value, new_value)
-    VALUES (NEW.id, COALESCE(NEW.updated_by, NEW.reported_by), 'severity', OLD.severity, NEW.severity);
+    VALUES (NEW.id, COALESCE(NEW.updated_by, NEW.reported_by), 'severity', OLD.severity::text, NEW.severity::text);
   END IF;
   IF OLD.priority IS DISTINCT FROM NEW.priority THEN
     INSERT INTO bug_history(bug_id, changed_by, field_name, old_value, new_value)
-    VALUES (NEW.id, COALESCE(NEW.updated_by, NEW.reported_by), 'priority', OLD.priority, NEW.priority);
+    VALUES (NEW.id, COALESCE(NEW.updated_by, NEW.reported_by), 'priority', OLD.priority::text, NEW.priority::text);
   END IF;
   IF OLD.assigned_to IS DISTINCT FROM NEW.assigned_to THEN
     INSERT INTO bug_history(bug_id, changed_by, field_name, old_value, new_value)
@@ -210,9 +194,7 @@ DROP TRIGGER IF EXISTS trg_auto_bug_history ON bugs;
 CREATE TRIGGER trg_auto_bug_history
   AFTER UPDATE ON bugs FOR EACH ROW EXECUTE FUNCTION auto_log_bug_history();
 
--- -------------------------------------------------------
 -- 10. RLS
--- -------------------------------------------------------
 ALTER TABLE bug_relationships  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bug_watchers       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bug_attachments    ENABLE ROW LEVEL SECURITY;
@@ -220,9 +202,9 @@ ALTER TABLE release_builds     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE release_documents  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE qa_approvals       ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "auth_bug_relationships" ON bug_relationships FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_bug_watchers"      ON bug_watchers      FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_bug_attachments"   ON bug_attachments   FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_release_builds"    ON release_builds    FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_release_documents" ON release_documents FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_qa_approvals"      ON qa_approvals      FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "auth_bug_relationships" ON bug_relationships FOR ALL USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_bug_watchers"      ON bug_watchers      FOR ALL USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_bug_attachments"   ON bug_attachments   FOR ALL USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_release_builds"    ON release_builds    FOR ALL USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_release_documents" ON release_documents FOR ALL USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_qa_approvals"      ON qa_approvals      FOR ALL USING ((select auth.role()) = 'authenticated');

@@ -1,5 +1,6 @@
 -- ============================================================
 -- Phase 2: Test Management & Execution Engine
+-- FIX: update_updated_at_column → update_updated_at
 -- ============================================================
 
 -- Test Plans: group test cases for a release
@@ -62,13 +63,13 @@ CREATE TABLE IF NOT EXISTS test_session_cases (
     order_index  INTEGER NOT NULL DEFAULT 0,
     status       TEXT NOT NULL DEFAULT 'pending'
                      CHECK (status IN ('pending','in_progress','pass','fail','blocked','skipped','not_tested')),
-    execution_id UUID,  -- FK added below after test_executions created
+    execution_id UUID,
     started_at   TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
     created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Test Executions: one per test case run (replaces test_results for sessions)
+-- Test Executions: one per test case run
 CREATE TABLE IF NOT EXISTS test_executions (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     session_id      UUID NOT NULL REFERENCES test_sessions(id) ON DELETE CASCADE,
@@ -86,19 +87,18 @@ CREATE TABLE IF NOT EXISTS test_executions (
     app_version     TEXT,
     build_number    TEXT,
     duration_seconds INTEGER DEFAULT 0,
-    step_snapshot   JSONB,  -- snapshot of steps at execution time
+    step_snapshot   JSONB,
     started_at      TIMESTAMPTZ DEFAULT NOW(),
     completed_at    TIMESTAMPTZ,
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Add FK back-reference
 ALTER TABLE test_session_cases
     ADD CONSTRAINT fk_session_case_execution
     FOREIGN KEY (execution_id) REFERENCES test_executions(id) ON DELETE SET NULL;
 
--- Execution Step Results: per-step pass/fail with evidence
+-- Execution Step Results
 CREATE TABLE IF NOT EXISTS execution_step_results (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     execution_id    UUID NOT NULL REFERENCES test_executions(id) ON DELETE CASCADE,
@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS execution_step_results (
     updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Execution Attachments: evidence files (screenshots, logs, etc)
+-- Execution Attachments
 CREATE TABLE IF NOT EXISTS execution_attachments (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     execution_id    UUID NOT NULL REFERENCES test_executions(id) ON DELETE CASCADE,
@@ -128,37 +128,31 @@ CREATE TABLE IF NOT EXISTS execution_attachments (
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================
--- Indexes
--- ============================================================
-CREATE INDEX IF NOT EXISTS idx_test_plans_project ON test_plans(project_id);
-CREATE INDEX IF NOT EXISTS idx_test_plans_release ON test_plans(release_id);
-CREATE INDEX IF NOT EXISTS idx_test_sessions_project ON test_sessions(project_id);
-CREATE INDEX IF NOT EXISTS idx_test_sessions_release ON test_sessions(release_id);
-CREATE INDEX IF NOT EXISTS idx_test_sessions_assignee ON test_sessions(assigned_to);
-CREATE INDEX IF NOT EXISTS idx_test_sessions_status ON test_sessions(status);
-CREATE INDEX IF NOT EXISTS idx_session_cases_session ON test_session_cases(session_id);
+-- ── Indexes ────────────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_test_plans_project      ON test_plans(project_id);
+CREATE INDEX IF NOT EXISTS idx_test_plans_release      ON test_plans(release_id);
+CREATE INDEX IF NOT EXISTS idx_test_sessions_project   ON test_sessions(project_id);
+CREATE INDEX IF NOT EXISTS idx_test_sessions_release   ON test_sessions(release_id);
+CREATE INDEX IF NOT EXISTS idx_test_sessions_assignee  ON test_sessions(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_test_sessions_status    ON test_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_session_cases_session   ON test_session_cases(session_id);
 CREATE INDEX IF NOT EXISTS idx_test_executions_session ON test_executions(session_id);
-CREATE INDEX IF NOT EXISTS idx_test_executions_case ON test_executions(test_case_id);
+CREATE INDEX IF NOT EXISTS idx_test_executions_case    ON test_executions(test_case_id);
 CREATE INDEX IF NOT EXISTS idx_test_executions_executor ON test_executions(executed_by);
-CREATE INDEX IF NOT EXISTS idx_exec_steps_execution ON execution_step_results(execution_id);
+CREATE INDEX IF NOT EXISTS idx_exec_steps_execution    ON execution_step_results(execution_id);
 CREATE INDEX IF NOT EXISTS idx_exec_attachments_execution ON execution_attachments(execution_id);
 
--- ============================================================
--- Updated_at triggers
--- ============================================================
+-- ── Updated_at triggers (FIXED: update_updated_at not update_updated_at_column) ──
 CREATE TRIGGER set_updated_at_test_plans
-    BEFORE UPDATE ON test_plans FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    BEFORE UPDATE ON test_plans FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER set_updated_at_test_sessions
-    BEFORE UPDATE ON test_sessions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    BEFORE UPDATE ON test_sessions FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER set_updated_at_test_executions
-    BEFORE UPDATE ON test_executions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    BEFORE UPDATE ON test_executions FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER set_updated_at_exec_steps
-    BEFORE UPDATE ON execution_step_results FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    BEFORE UPDATE ON execution_step_results FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
--- ============================================================
--- Auto-update session progress when execution_step_results changes
--- ============================================================
+-- ── Session progress auto-update ──────────────────────────
 CREATE OR REPLACE FUNCTION update_session_progress()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -202,29 +196,26 @@ CREATE TRIGGER trg_update_session_progress
     WHEN (OLD.status IS DISTINCT FROM NEW.status)
     EXECUTE FUNCTION update_session_progress();
 
--- ============================================================
--- RLS Policies
--- ============================================================
-ALTER TABLE test_plans ENABLE ROW LEVEL SECURITY;
-ALTER TABLE test_plan_cases ENABLE ROW LEVEL SECURITY;
-ALTER TABLE test_sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE test_session_cases ENABLE ROW LEVEL SECURITY;
-ALTER TABLE test_executions ENABLE ROW LEVEL SECURITY;
+-- ── RLS ───────────────────────────────────────────────────
+ALTER TABLE test_plans          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE test_plan_cases     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE test_sessions       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE test_session_cases  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE test_executions     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE execution_step_results ENABLE ROW LEVEL SECURITY;
-ALTER TABLE execution_attachments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE execution_attachments  ENABLE ROW LEVEL SECURITY;
 
--- Allow all authenticated users to read; writes controlled per role
-CREATE POLICY "auth_read_test_plans" ON test_plans FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_write_test_plans" ON test_plans FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_read_sessions" ON test_sessions FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_write_sessions" ON test_sessions FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_read_session_cases" ON test_session_cases FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_write_session_cases" ON test_session_cases FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_read_plan_cases" ON test_plan_cases FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_write_plan_cases" ON test_plan_cases FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_read_executions" ON test_executions FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_write_executions" ON test_executions FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_read_exec_steps" ON execution_step_results FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_write_exec_steps" ON execution_step_results FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_read_exec_attach" ON execution_attachments FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "auth_write_exec_attach" ON execution_attachments FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "auth_read_test_plans"   ON test_plans          FOR SELECT USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_write_test_plans"  ON test_plans          FOR ALL    USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_read_sessions"     ON test_sessions       FOR SELECT USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_write_sessions"    ON test_sessions       FOR ALL    USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_read_session_cases"  ON test_session_cases FOR SELECT USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_write_session_cases" ON test_session_cases FOR ALL    USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_read_plan_cases"   ON test_plan_cases     FOR SELECT USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_write_plan_cases"  ON test_plan_cases     FOR ALL    USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_read_executions"   ON test_executions     FOR SELECT USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_write_executions"  ON test_executions     FOR ALL    USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_read_exec_steps"   ON execution_step_results FOR SELECT USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_write_exec_steps"  ON execution_step_results FOR ALL    USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_read_exec_attach"  ON execution_attachments  FOR SELECT USING ((select auth.role()) = 'authenticated');
+CREATE POLICY "auth_write_exec_attach" ON execution_attachments  FOR ALL    USING ((select auth.role()) = 'authenticated');
