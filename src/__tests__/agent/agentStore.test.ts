@@ -109,26 +109,24 @@ describe('agentStore — settings', () => {
 describe('agentStore — commands', () => {
   beforeEach(reset);
 
-  it('executeTest pushes ExecuteTest event', () => {
-    useAgentStore.getState().executeTest('sess-1', 'tc-1');
+  it('executeTest when disconnected pushes ExecuteTest_NotConnected event', () => {
+    useAgentStore.getState().executeTest('sess-1', 'tc-1', 'android_adb', []);
     const events = useAgentStore.getState().events;
-    expect(events.some(e => e.eventType === 'ExecuteTest')).toBe(true);
+    expect(events.some(e => e.eventType === 'ExecuteTest_NotConnected')).toBe(true);
   });
 
-  it('cancelExecution pushes CancelExecution event', () => {
-    useAgentStore.getState().cancelExecution('sess-1');
-    const events = useAgentStore.getState().events;
-    expect(events.some(e => e.eventType === 'CancelExecution')).toBe(true);
+  it('cancelExecution does not throw when disconnected', () => {
+    expect(() => useAgentStore.getState().cancelExecution('sess-1')).not.toThrow();
   });
 
-  it('refreshDiagnostics sets diagnostics snapshot', () => {
-    useAgentStore.getState().refreshDiagnostics();
+  it('refreshDiagnostics sets diagnostics snapshot', async () => {
+    await useAgentStore.getState().refreshDiagnostics();
     expect(useAgentStore.getState().diagnostics).not.toBeNull();
   });
 
-  it('refreshDiagnostics includes serverUrl from settings', () => {
+  it('refreshDiagnostics includes serverUrl from settings', async () => {
     useAgentStore.getState().updateSettings({ serverUrl: 'ws://example.com:8080' });
-    useAgentStore.getState().refreshDiagnostics();
+    await useAgentStore.getState().refreshDiagnostics();
     expect(useAgentStore.getState().diagnostics?.serverUrl).toBe('ws://example.com:8080');
   });
 });

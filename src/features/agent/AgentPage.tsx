@@ -85,7 +85,7 @@ export function AgentPage() {
 
       <TabPanel value={tab} index={5}>
         <CommandConsole
-          onExecuteTest={executeTest}
+          onExecuteTest={(sessionId, testCaseId) => executeTest(sessionId, testCaseId, 'android_adb', [])}
           onCancelExecution={cancelExecution}
           onRefreshDiagnostics={refreshDiagnostics}
           onRefreshDevices={refreshDevices}

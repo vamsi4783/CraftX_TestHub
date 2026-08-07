@@ -11,6 +11,8 @@ export const PROTOCOL_VERSION = '1.0' as const;
 export type CommandType =
   | 'ExecuteTest'
   | 'CancelExecution'
+  | 'PauseExecution'
+  | 'ResumeExecution'
   | 'GetHealth'
   | 'GetDiagnostics';
 
@@ -101,6 +103,14 @@ export interface ExecuteTestPayload {
 export interface CancelExecutionPayload {
   sessionId: string;
   reason:    string;
+}
+
+export interface PauseExecutionPayload {
+  sessionId: string;
+}
+
+export interface ResumeExecutionPayload {
+  sessionId: string;
 }
 
 export interface GetHealthPayload {

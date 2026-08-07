@@ -240,7 +240,7 @@ export class AutonomousRunnerEngine {
           ? AssertionEngine.toStepResult(
               step.stepId, step.stepNumber, step.action.action,
               await this.assertionEngine.evaluate(
-                step.action.params as AssertionParams,
+                step.action.params as unknown as AssertionParams,
                 driver,
                 step.stepId,
                 step.timeout_ms,
@@ -259,7 +259,7 @@ export class AutonomousRunnerEngine {
 
           await this.emitter.emitStepCompleted(
             { session_id: sessionId, step_id: step.stepId, step_number: step.stepNumber,
-              duration_ms: stepResult.duration_ms },
+              duration_ms: stepResult.duration_ms, assertion_passed: stepResult.success },
             ctx,
           );
           break;
@@ -284,7 +284,8 @@ export class AutonomousRunnerEngine {
                     confidence: healResult.confidence });
                 await this.emitter.emitStepCompleted(
                   { session_id: sessionId, step_id: step.stepId,
-                    step_number: step.stepNumber, duration_ms: stepResult.duration_ms },
+                    step_number: step.stepNumber, duration_ms: stepResult.duration_ms,
+                    assertion_passed: true },
                   ctx,
                 );
                 break;
@@ -367,7 +368,7 @@ export class AutonomousRunnerEngine {
         // stopOnFailure=false: log and continue
       }
 
-      if (runnerState === 'Failed' || runnerState === 'Cancelled') break;
+      if ((runnerState as string) === 'Failed' || (runnerState as string) === 'Cancelled') break;
     }
 
     // ── Disconnect ───────────────────────────────────────────────────────────
