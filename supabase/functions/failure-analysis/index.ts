@@ -4,8 +4,11 @@
 //
 // Deploy: supabase functions deploy failure-analysis
 // Env:    ANTHROPIC_API_KEY must be set in the Supabase dashboard.
+// Auth:   Requires a valid Supabase JWT in the Authorization header.
+//         The Supabase client sends this automatically via functions.invoke().
 
-import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { serve }        from 'https://deno.land/std@0.224.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin':  '*',
@@ -33,6 +36,31 @@ interface AnalysisResponse {
   qaExplanation?:          string;
 }
 
+// ── JWT guard ─────────────────────────────────────────────────────────────────
+async function verifyAuth(req: Request): Promise<{ ok: boolean; error?: string }> {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return { ok: false, error: 'Missing or malformed Authorization header' };
+  }
+
+  const supabaseUrl     = Deno.env.get('SUPABASE_URL');
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return { ok: false, error: 'Supabase environment not configured' };
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) {
+    return { ok: false, error: 'Unauthorized: invalid or expired token' };
+  }
+
+  return { ok: true };
+}
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS });
@@ -40,6 +68,15 @@ serve(async (req: Request) => {
 
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS });
+  }
+
+  // ── Auth check ──────────────────────────────────────────────────────────────
+  const auth = await verifyAuth(req);
+  if (!auth.ok) {
+    return new Response(
+      JSON.stringify({ error: auth.error }),
+      { status: 401, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
+    );
   }
 
   try {
@@ -103,16 +140,15 @@ serve(async (req: Request) => {
         .replace(/\n?```$/, '');
       analysis = JSON.parse(cleaned);
     } catch {
-      // Return a graceful fallback rather than crashing
       analysis = {
-        rootCause:            'AI analysis could not parse a structured response.',
-        confidence:           0.3,
-        evidenceSummary:      rawText.slice(0, 500),
-        likelySourceFiles:    [],
-        suggestedFix:         'Review the failing steps manually.',
+        rootCause:             'AI analysis could not parse a structured response.',
+        confidence:            0.3,
+        evidenceSummary:       rawText.slice(0, 500),
+        likelySourceFiles:     [],
+        suggestedFix:          'Review the failing steps manually.',
         regressionProbability: 0.5,
-        developerExplanation: rawText.slice(0, 500),
-        qaExplanation:        'The AI was unable to generate a structured explanation.',
+        developerExplanation:  rawText.slice(0, 500),
+        qaExplanation:         'The AI was unable to generate a structured explanation.',
       };
     }
 

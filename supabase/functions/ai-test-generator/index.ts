@@ -4,8 +4,10 @@
 //
 // Deploy: supabase functions deploy ai-test-generator
 // Env:    ANTHROPIC_API_KEY must be set in the Supabase dashboard.
+// Auth:   Requires a valid Supabase JWT in the Authorization header.
 
-import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { serve }        from 'https://deno.land/std@0.224.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin':  '*',
@@ -13,8 +15,33 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const MODEL    = 'claude-sonnet-5';
+const MODEL      = 'claude-sonnet-5';
 const MAX_TOKENS = 8192;
+
+// ── JWT guard ─────────────────────────────────────────────────────────────────
+async function verifyAuth(req: Request): Promise<{ ok: boolean; error?: string }> {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return { ok: false, error: 'Missing or malformed Authorization header' };
+  }
+
+  const supabaseUrl     = Deno.env.get('SUPABASE_URL');
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return { ok: false, error: 'Supabase environment not configured' };
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) {
+    return { ok: false, error: 'Unauthorized: invalid or expired token' };
+  }
+
+  return { ok: true };
+}
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -23,6 +50,15 @@ serve(async (req: Request) => {
 
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS });
+  }
+
+  // ── Auth check ──────────────────────────────────────────────────────────────
+  const auth = await verifyAuth(req);
+  if (!auth.ok) {
+    return new Response(
+      JSON.stringify({ error: auth.error }),
+      { status: 401, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
+    );
   }
 
   try {
@@ -90,15 +126,14 @@ serve(async (req: Request) => {
         .replace(/\n?```$/, '');
       parsed = JSON.parse(cleaned);
     } catch {
-      // Return empty rather than crashing
       parsed = { suggestions: [] };
     }
 
     return new Response(
       JSON.stringify({
-        suggestions:     parsed.suggestions ?? [],
-        model:           anthropicData.model ?? MODEL,
-        generationTime:  Date.now() - t0,
+        suggestions:    parsed.suggestions ?? [],
+        model:          anthropicData.model ?? MODEL,
+        generationTime: Date.now() - t0,
       }),
       { headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
     );

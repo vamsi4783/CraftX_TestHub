@@ -1,8 +1,10 @@
 // ─── Edge Function: regression-analysis (Phase 4 M9) ──────────────────────────
 // Deno / Supabase Edge Function — AI regression impact analysis via Claude.
 // Deploy: supabase functions deploy regression-analysis
+// Auth:   Requires a valid Supabase JWT in the Authorization header.
 
-import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { serve }        from 'https://deno.land/std@0.224.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin':  '*',
@@ -14,18 +16,52 @@ const MODEL      = 'claude-sonnet-5';
 const MAX_TOKENS = 4096;
 
 interface RegressionInsight {
-  likelyRegressionAreas?:   string[];
-  untestedScenarios?:       string[];
+  likelyRegressionAreas?:    string[];
+  untestedScenarios?:        string[];
   suggestedRegressionSuite?: string[];
-  highRiskModules?:         string[];
-  developerExplanation?:    string;
-  qaExplanation?:           string;
-  confidence?:              number;
+  highRiskModules?:          string[];
+  developerExplanation?:     string;
+  qaExplanation?:            string;
+  confidence?:               number;
+}
+
+// ── JWT guard ─────────────────────────────────────────────────────────────────
+async function verifyAuth(req: Request): Promise<{ ok: boolean; error?: string }> {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return { ok: false, error: 'Missing or malformed Authorization header' };
+  }
+
+  const supabaseUrl     = Deno.env.get('SUPABASE_URL');
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return { ok: false, error: 'Supabase environment not configured' };
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) {
+    return { ok: false, error: 'Unauthorized: invalid or expired token' };
+  }
+
+  return { ok: true };
 }
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS });
+
+  // ── Auth check ──────────────────────────────────────────────────────────────
+  const auth = await verifyAuth(req);
+  if (!auth.ok) {
+    return new Response(
+      JSON.stringify({ error: auth.error }),
+      { status: 401, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
+    );
+  }
 
   try {
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
@@ -71,13 +107,13 @@ serve(async (req: Request) => {
       insight = JSON.parse(cleaned);
     } catch {
       insight = {
-        likelyRegressionAreas:   [],
-        untestedScenarios:       [],
+        likelyRegressionAreas:    [],
+        untestedScenarios:        [],
         suggestedRegressionSuite: [],
-        highRiskModules:         [],
-        developerExplanation:    rawText.slice(0, 500),
-        qaExplanation:           'AI could not generate a structured response.',
-        confidence:              0.3,
+        highRiskModules:          [],
+        developerExplanation:     rawText.slice(0, 500),
+        qaExplanation:            'AI could not generate a structured response.',
+        confidence:               0.3,
       };
     }
 
