@@ -33,7 +33,8 @@ import { NotificationsPage } from '@/features/notifications/NotificationsPage';
 import { AgentPage } from '@/features/agent/AgentPage';
 import { AutonomousRunnerPage } from '@/features/autonomous-runner';
 import { AITestGeneratorPage }  from '@/features/ai-test-generator/AITestGeneratorPage';
-import { HealingReviewPage }    from '@/features/healing-review/HealingReviewPage';
+import { HealingReviewPage }      from '@/features/healing-review/HealingReviewPage';
+import { FailureAnalysisPage }    from '@/features/failure-analysis/FailureAnalysisPage';
 
 // My Tests page (inline)
 import { useQuery } from '@tanstack/react-query';
@@ -182,7 +183,8 @@ export const router = createBrowserRouter([
       { path: 'search',              element: <P><SearchPage /></P> },
       { path: 'agent',               element: <P><AgentPage /></P> },
       { path: 'ai-test-generator',   element: <P><AITestGeneratorPage /></P> },
-      { path: 'healing-review',      element: <P><HealingReviewPage /></P> },
+      { path: 'healing-review',       element: <P><HealingReviewPage /></P> },
+      { path: 'failure-analysis',    element: <P><FailureAnalysisPage /></P> },
     ],
   },
   { path: '*', element: <Navigate to="/dashboard" replace /> },

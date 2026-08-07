@@ -61,6 +61,7 @@ const NAV: NavItem[] = [
   { label: 'Agent Runtime',    path: '/agent',              icon: <SmartToyIcon />,     dividerBefore: true },
   { label: 'AI Test Generator', path: '/ai-test-generator', icon: <AutoAwesomeIcon /> },
   { label: 'Healing Review',    path: '/healing-review',    icon: <AutoFixHighIcon /> },
+  { label: 'Failure Analysis',  path: '/failure-analysis',  icon: <BugReportIcon /> },
   { label: 'Settings',         path: '/settings',     icon: <SettingsIcon /> },
 ];
 
