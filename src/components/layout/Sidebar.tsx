@@ -25,6 +25,7 @@ import VideoLabelIcon from '@mui/icons-material/VideoLabel';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import SmartToyIcon     from '@mui/icons-material/SmartToy';
 import AutoAwesomeIcon  from '@mui/icons-material/AutoAwesome';
+import AutoFixHighIcon  from '@mui/icons-material/AutoFixHigh';
 import { useAuth } from '@/hooks/useAuth';
 import { getInitials } from '@/lib/utils';
 
@@ -59,6 +60,7 @@ const NAV: NavItem[] = [
   { label: 'Users',            path: '/users',        icon: <PeopleIcon />, adminOnly: true },
   { label: 'Agent Runtime',    path: '/agent',              icon: <SmartToyIcon />,     dividerBefore: true },
   { label: 'AI Test Generator', path: '/ai-test-generator', icon: <AutoAwesomeIcon /> },
+  { label: 'Healing Review',    path: '/healing-review',    icon: <AutoFixHighIcon /> },
   { label: 'Settings',         path: '/settings',     icon: <SettingsIcon /> },
 ];
 

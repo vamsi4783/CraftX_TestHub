@@ -34,6 +34,7 @@ import type {
   RunnerTimelineEventKind,
   PauseResumeSignal,
 } from './AutonomousRunnerTypes.js';
+import type { ISelfHealingPlugin } from '../healing/HealingTypes.js';
 
 // ─── AutonomousRunnerEngine ───────────────────────────────────────────────────
 
@@ -42,11 +43,13 @@ export class AutonomousRunnerEngine {
   private readonly assertionEngine: AssertionEngine;
 
   constructor(
-    private readonly driverRegistry: DriverRegistry,
-    private readonly stepExecutor:   StepExecutor,
-    private readonly emitter:        IExecutionEventEmitter,
+    private readonly driverRegistry:   DriverRegistry,
+    private readonly stepExecutor:     StepExecutor,
+    private readonly emitter:          IExecutionEventEmitter,
     /** Optional custom registry — defaults to the standard built-in registry. */
-    assertionRegistry?: AssertionRegistry,
+    assertionRegistry?:                AssertionRegistry,
+    /** Optional self-healing plugin — injected to avoid direct coupling. */
+    private readonly healingPlugin?:   ISelfHealingPlugin,
   ) {
     this.assertionEngine = new AssertionEngine(assertionRegistry ?? new AssertionRegistry());
   }
@@ -263,6 +266,32 @@ export class AutonomousRunnerEngine {
         } else {
           lastError = stepResult.error ?? 'Unknown failure';
           if (attempt === config.maxRetries) {
+            // ── Self-healing hook (M7) ────────────────────────────────────────
+            // Try healing before marking the step as permanently failed.
+            // healing.tryHeal() never modifies the stored automation_config.
+            if (this.healingPlugin) {
+              const healResult = await this.healingPlugin.tryHeal(
+                step, driver, lastError, runId, sessionId,
+              );
+              if (healResult.outcome === 'healed') {
+                stepPassed       = true;
+                prog.status      = 'passed';
+                prog.completedAt = new Date().toISOString();
+                addEvent('StepPassed',
+                  `Step ${step.stepNumber} healed and passed (strategy: ${healResult.strategyUsed})`,
+                  step.stepId, step.stepNumber,
+                  { healed: true, strategy: healResult.strategyUsed,
+                    confidence: healResult.confidence });
+                await this.emitter.emitStepCompleted(
+                  { session_id: sessionId, step_id: step.stepId,
+                    step_number: step.stepNumber, duration_ms: stepResult.duration_ms },
+                  ctx,
+                );
+                break;
+              }
+            }
+            // ── End healing hook ──────────────────────────────────────────────
+
             prog.status      = 'failed';
             prog.error       = lastError;
             prog.completedAt = new Date().toISOString();
