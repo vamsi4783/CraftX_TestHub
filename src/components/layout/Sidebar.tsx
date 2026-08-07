@@ -23,6 +23,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import ExtensionIcon from '@mui/icons-material/Extension';
 import VideoLabelIcon from '@mui/icons-material/VideoLabel';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
+import SmartToyIcon from '@mui/icons-material/SmartToy';
 import { useAuth } from '@/hooks/useAuth';
 import { getInitials } from '@/lib/utils';
 
@@ -55,7 +56,8 @@ const NAV: NavItem[] = [
   { label: 'Team Performance', path: '/analytics/team',     icon: <GroupsIcon /> },
   { label: 'Release History',  path: '/analytics/releases', icon: <HistoryIcon /> },
   { label: 'Users',            path: '/users',        icon: <PeopleIcon />, adminOnly: true },
-  { label: 'Settings',         path: '/settings',     icon: <SettingsIcon />, dividerBefore: true },
+  { label: 'Agent Runtime',    path: '/agent',        icon: <SmartToyIcon />, dividerBefore: true },
+  { label: 'Settings',         path: '/settings',     icon: <SettingsIcon /> },
 ];
 
 interface Props { mobileOpen: boolean; onMobileClose: () => void }

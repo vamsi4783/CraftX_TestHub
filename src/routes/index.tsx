@@ -30,6 +30,7 @@ import { ReleaseHistoryPage } from '@/features/analytics/ReleaseHistoryPage';
 import { UsersPage } from '@/features/users/UsersPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { NotificationsPage } from '@/features/notifications/NotificationsPage';
+import { AgentPage } from '@/features/agent/AgentPage';
 
 // My Tests page (inline)
 import { useQuery } from '@tanstack/react-query';
@@ -175,6 +176,7 @@ export const router = createBrowserRouter([
       { path: 'settings',            element: <P><SettingsPage /></P> },
       { path: 'notifications',       element: <P><NotificationsPage /></P> },
       { path: 'search',              element: <P><SearchPage /></P> },
+      { path: 'agent',               element: <P><AgentPage /></P> },
     ],
   },
   { path: '*', element: <Navigate to="/dashboard" replace /> },
