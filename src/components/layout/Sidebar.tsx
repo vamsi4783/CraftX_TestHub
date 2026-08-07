@@ -23,7 +23,8 @@ import MenuIcon from '@mui/icons-material/Menu';
 import ExtensionIcon from '@mui/icons-material/Extension';
 import VideoLabelIcon from '@mui/icons-material/VideoLabel';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
-import SmartToyIcon from '@mui/icons-material/SmartToy';
+import SmartToyIcon     from '@mui/icons-material/SmartToy';
+import AutoAwesomeIcon  from '@mui/icons-material/AutoAwesome';
 import { useAuth } from '@/hooks/useAuth';
 import { getInitials } from '@/lib/utils';
 
@@ -56,7 +57,8 @@ const NAV: NavItem[] = [
   { label: 'Team Performance', path: '/analytics/team',     icon: <GroupsIcon /> },
   { label: 'Release History',  path: '/analytics/releases', icon: <HistoryIcon /> },
   { label: 'Users',            path: '/users',        icon: <PeopleIcon />, adminOnly: true },
-  { label: 'Agent Runtime',    path: '/agent',        icon: <SmartToyIcon />, dividerBefore: true },
+  { label: 'Agent Runtime',    path: '/agent',              icon: <SmartToyIcon />,     dividerBefore: true },
+  { label: 'AI Test Generator', path: '/ai-test-generator', icon: <AutoAwesomeIcon /> },
   { label: 'Settings',         path: '/settings',     icon: <SettingsIcon /> },
 ];
 
