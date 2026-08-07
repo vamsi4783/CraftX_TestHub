@@ -5,7 +5,7 @@ import {
   Box, Card, CardContent, Chip, Divider, Grid, IconButton, Stack,
   Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
   Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControl,
-  InputLabel, MenuItem, Select, CircularProgress, Alert,
+  InputLabel, MenuItem, Select, CircularProgress, Alert, Tooltip,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -14,10 +14,12 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
 import { PageHeader } from '@/components/common/PageHeader';
 import { LoadingState } from '@/components/common/LoadingState';
 import { StatusChip } from '@/components/common/StatusChip';
 import { SeverityChip } from '@/components/common/SeverityChip';
+import { AutomationConfigEditor } from '@/features/automation/AutomationConfigEditor';
 import { testCaseService } from '@/services/testCaseService';
 import { moduleService } from '@/services/moduleService';
 import { toastSuccess, toastError } from '@/lib/errors';
@@ -201,6 +203,7 @@ export function TestCaseDetailPage() {
   const { profile } = useAuth();
   const [editOpen, setEditOpen] = useState(false);
   const [stepsOpen, setStepsOpen] = useState(false);
+  const [automationStep, setAutomationStep] = useState<TestCaseStep | null>(null);
 
   const { data: tc, isLoading, isError } = useQuery({
     queryKey: ['test-case', id],
@@ -368,6 +371,7 @@ export function TestCaseDetailPage() {
                     <TableCell>Action</TableCell>
                     <TableCell>Expected Result</TableCell>
                     <TableCell>Notes</TableCell>
+                    <TableCell sx={{ width: 120 }}>Automation</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -394,6 +398,19 @@ export function TestCaseDetailPage() {
                       <TableCell>
                         <Typography variant="caption" color="text.secondary">{step.notes ?? '—'}</Typography>
                       </TableCell>
+                      <TableCell>
+                        <Tooltip title={step.automation_config ? `${step.automation_config.action} · ${step.automation_config.driver_id}` : 'Configure automation'}>
+                          <Chip
+                            icon={<SettingsSuggestIcon />}
+                            label={step.automation_config ? step.automation_config.action.replace('_', ' ') : 'Configure'}
+                            size="small"
+                            color={step.automation_config ? 'success' : 'default'}
+                            variant={step.automation_config ? 'filled' : 'outlined'}
+                            onClick={() => setAutomationStep(step)}
+                            sx={{ cursor: 'pointer', maxWidth: 110, '.MuiChip-label': { textTransform: 'capitalize' } }}
+                          />
+                        </Tooltip>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -409,6 +426,14 @@ export function TestCaseDetailPage() {
       )}
       {stepsOpen && (
         <EditStepsDialog open={stepsOpen} onClose={() => setStepsOpen(false)} tc={tc} existingSteps={steps} />
+      )}
+      {automationStep && (
+        <AutomationConfigEditor
+          open={!!automationStep}
+          onClose={() => setAutomationStep(null)}
+          step={automationStep}
+          testCaseId={tc.id}
+        />
       )}
     </Box>
   );

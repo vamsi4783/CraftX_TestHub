@@ -55,6 +55,14 @@ export const testCaseService = {
     }
   },
 
+  async saveStepAutomation(stepId: string, config: import('@/types').AutomationConfig | null): Promise<void> {
+    const { error } = await supabase
+      .from('test_case_steps')
+      .update({ automation_config: config })
+      .eq('id', stepId);
+    if (error) throw error;
+  },
+
   // Assignments
   async getAssignments(releaseId: string, userId?: string): Promise<TestAssignment[]> {
     let q = supabase

@@ -132,6 +132,46 @@ export interface TestCase {
   creator?: Profile;
 }
 
+// ─── Automation Configuration (Phase 4 M1) ───────────────────────────────────
+
+export type AutomationAction =
+  | 'tap' | 'swipe' | 'type_text' | 'wait'
+  | 'launch_app' | 'assertion' | 'screenshot'
+  | 'press_back' | 'press_key';
+
+export type AutomationDriverId = 'android' | 'browser';
+
+export type AssertionType =
+  | 'text_present' | 'element_visible' | 'package' | 'activity' | 'screenshot';
+
+export interface AutomationParams {
+  // tap / assertion element target
+  x?: number;
+  y?: number;
+  // swipe end point
+  x2?: number;
+  y2?: number;
+  // type_text value or launch_app package
+  value?: string;
+  // wait or swipe gesture duration
+  duration_ms?: number;
+  // assertion
+  assertion_type?: AssertionType;
+  expected_value?: string;
+  // press_key
+  key?: string;
+  // per-step timeout override
+  timeout_ms?: number;
+}
+
+export interface AutomationConfig {
+  driver_id: AutomationDriverId;
+  action: AutomationAction;
+  params: AutomationParams;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export interface TestCaseStep {
   id: string;
   test_case_id: string;
@@ -139,6 +179,7 @@ export interface TestCaseStep {
   description: string;
   expected_result: string;
   notes: string | null;
+  automation_config: AutomationConfig | null;
   created_at: string;
   updated_at: string;
 }
