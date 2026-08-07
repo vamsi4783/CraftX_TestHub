@@ -137,12 +137,33 @@ export interface TestCase {
 export type AutomationAction =
   | 'tap' | 'swipe' | 'type_text' | 'wait'
   | 'launch_app' | 'assertion' | 'screenshot'
-  | 'press_back' | 'press_key';
+  | 'press_back' | 'press_key'
+  | 'navigate' | 'click' | 'fill' | 'scroll';
 
 export type AutomationDriverId = 'android' | 'browser';
 
-export type AssertionType =
+/** M1 legacy — kept for backwards-compat */
+export type AssertionTypeLegacy =
   | 'text_present' | 'element_visible' | 'package' | 'activity' | 'screenshot';
+
+/** M4 — full assertion kind set matching AssertionEngine */
+export type AssertionType =
+  // Android
+  | 'assert_activity'
+  | 'assert_package'
+  | 'assert_text'
+  | 'assert_view_exists'
+  | 'assert_screenshot_exists'
+  // Chrome
+  | 'assert_element_exists'
+  | 'assert_text_exists'
+  | 'assert_attribute'
+  | 'assert_url'
+  | 'assert_title'
+  // Common
+  | 'assert_wait_until'
+  | 'assert_value_equals'
+  | 'assert_regex_match';
 
 export interface AutomationParams {
   // tap / assertion element target
@@ -155,9 +176,14 @@ export interface AutomationParams {
   value?: string;
   // wait or swipe gesture duration
   duration_ms?: number;
-  // assertion
-  assertion_type?: AssertionType;
-  expected_value?: string;
+  // assertion (M4)
+  assertion_kind?: AssertionType;
+  expected?: string;
+  selector?: string;
+  attribute?: string;
+  regex?: string;
+  negate?: boolean;
+  poll_interval_ms?: number;
   // press_key
   key?: string;
   // per-step timeout override

@@ -41,15 +41,43 @@ const ACTION_META: Record<AutomationAction, ActionMeta> = {
   screenshot:  { label: 'Screenshot',  icon: <CameraAltIcon />,     drivers: ['android','browser'], description: 'Capture a screenshot as evidence' },
   press_back:  { label: 'Press Back',  icon: <ArrowBackIcon />,     drivers: ['android'],           description: 'Press the Android back button' },
   press_key:   { label: 'Press Key',   icon: <KeyIcon />,           drivers: ['android'],           description: 'Press a hardware or system key' },
+  navigate:    { label: 'Navigate',    icon: <RocketLaunchIcon />,  drivers: ['browser'],           description: 'Navigate to a URL' },
+  click:       { label: 'Click',       icon: <TouchAppIcon />,      drivers: ['browser'],           description: 'Click an element by CSS selector' },
+  fill:        { label: 'Fill',        icon: <KeyboardIcon />,      drivers: ['browser'],           description: 'Fill an input field' },
+  scroll:      { label: 'Scroll',      icon: <SwipeIcon />,         drivers: ['browser'],           description: 'Scroll the page' },
 };
 
-const ASSERTION_TYPES: { value: AssertionType; label: string }[] = [
-  { value: 'text_present',    label: 'Text is present on screen' },
-  { value: 'element_visible', label: 'Element is visible' },
-  { value: 'package',         label: 'App package is active' },
-  { value: 'activity',        label: 'Activity is in foreground' },
-  { value: 'screenshot',      label: 'Screenshot matches baseline' },
+// ─── M4 assertion type catalogue ─────────────────────────────────────────────
+
+interface AssertionMeta {
+  value:   AssertionType;
+  label:   string;
+  group:   'Android' | 'Chrome' | 'Common';
+  /** Fields this assertion type needs */
+  fields:  ('expected' | 'selector' | 'attribute' | 'regex' | 'value' | 'timeout' | 'poll_interval' | 'negate')[];
+}
+
+const ASSERTION_TYPES: AssertionMeta[] = [
+  // Android
+  { value: 'assert_activity',        label: 'Activity is in foreground',   group: 'Android', fields: ['expected', 'negate'] },
+  { value: 'assert_package',         label: 'App package is active',        group: 'Android', fields: ['expected', 'negate'] },
+  { value: 'assert_text',            label: 'Text is present (Android UI)', group: 'Android', fields: ['expected', 'negate'] },
+  { value: 'assert_view_exists',     label: 'View exists (XPath/ID)',       group: 'Android', fields: ['selector', 'negate'] },
+  { value: 'assert_screenshot_exists', label: 'Screenshot can be captured', group: 'Android', fields: ['negate'] },
+  // Chrome
+  { value: 'assert_element_exists',  label: 'Element exists (CSS selector)', group: 'Chrome', fields: ['selector', 'negate'] },
+  { value: 'assert_text_exists',     label: 'Text exists on page',           group: 'Chrome', fields: ['expected', 'negate'] },
+  { value: 'assert_attribute',       label: 'Element attribute equals',      group: 'Chrome', fields: ['selector', 'attribute', 'expected', 'negate'] },
+  { value: 'assert_url',             label: 'Page URL matches',              group: 'Chrome', fields: ['expected', 'negate'] },
+  { value: 'assert_title',           label: 'Page title matches',            group: 'Chrome', fields: ['expected', 'negate'] },
+  // Common
+  { value: 'assert_wait_until',      label: 'Wait until text appears',       group: 'Common', fields: ['expected', 'timeout', 'poll_interval', 'negate'] },
+  { value: 'assert_value_equals',    label: 'Value equals (exact)',          group: 'Common', fields: ['expected', 'value', 'negate'] },
+  { value: 'assert_regex_match',     label: 'Value matches regex',           group: 'Common', fields: ['regex', 'value', 'negate'] },
 ];
+
+const ASSERTION_META: Record<AssertionType, AssertionMeta> =
+  Object.fromEntries(ASSERTION_TYPES.map(a => [a.value, a])) as Record<AssertionType, AssertionMeta>;
 
 // ─── Empty config factory ────────────────────────────────────────────────────
 
@@ -131,36 +159,134 @@ function ParamFields({ config, onChange }: {
           helperText="Android package name of the app to launch" />
       );
 
-    case 'assertion':
+    case 'assertion': {
+      const kind = p.assertion_kind as AssertionType | undefined;
+      const meta = kind ? ASSERTION_META[kind] : undefined;
+      const fields = meta?.fields ?? [];
+
+      // Group assertions for the dropdown
+      const groups = ['Android', 'Chrome', 'Common'] as const;
+
       return (
         <Box display="flex" flexDirection="column" gap={1.5}>
+          {/* Kind selector */}
           <FormControl fullWidth size="small">
             <InputLabel>Assertion type</InputLabel>
-            <Select label="Assertion type" value={p.assertion_type ?? ''}
-              onChange={e => set({ assertion_type: e.target.value as AssertionType })}>
-              {ASSERTION_TYPES.map(a => (
-                <MenuItem key={a.value} value={a.value}>{a.label}</MenuItem>
-              ))}
+            <Select
+              label="Assertion type"
+              value={kind ?? ''}
+              onChange={e => set({ assertion_kind: e.target.value as AssertionType })}
+            >
+              {groups.map(g => [
+                <MenuItem key={g} disabled sx={{ fontWeight: 700, opacity: 0.6, fontSize: 11 }}>
+                  — {g} —
+                </MenuItem>,
+                ...ASSERTION_TYPES.filter(a => a.group === g).map(a => (
+                  <MenuItem key={a.value} value={a.value}>{a.label}</MenuItem>
+                )),
+              ])}
             </Select>
           </FormControl>
-          {p.assertion_type && p.assertion_type !== 'screenshot' && (
-            <TextField label="Expected value" value={p.expected_value ?? ''} size="small"
-              onChange={e => set({ expected_value: e.target.value })}
-              fullWidth placeholder={
-                p.assertion_type === 'text_present'    ? 'Text that must appear…' :
-                p.assertion_type === 'package'         ? 'com.example.app' :
-                p.assertion_type === 'activity'        ? '.MainActivity' :
+
+          {/* Conditional fields */}
+          {fields.includes('expected') && (
+            <TextField label="Expected value" size="small" fullWidth
+              value={p.expected ?? ''}
+              onChange={e => set({ expected: e.target.value })}
+              placeholder={
+                kind === 'assert_package'  ? 'com.example.app' :
+                kind === 'assert_activity' ? 'com.example/.MainActivity' :
+                kind === 'assert_url'      ? 'https://example.com' :
+                kind === 'assert_title'    ? 'Page Title' :
                 'Expected value…'
-              } />
+              }
+            />
           )}
-          {p.assertion_type === 'element_visible' && (
+
+          {fields.includes('selector') && (
+            <TextField label="Selector" size="small" fullWidth
+              value={p.selector ?? ''}
+              onChange={e => set({ selector: e.target.value })}
+              placeholder={
+                kind === 'assert_view_exists'    ? '//Button[@text="Submit"]' :
+                kind === 'assert_element_exists' ? '#submit-btn' :
+                kind === 'assert_attribute'      ? '.my-class' :
+                'XPath / CSS selector / resource-id'
+              }
+              helperText={
+                kind === 'assert_view_exists'    ? 'XPath or resource-id' :
+                kind === 'assert_element_exists' ? 'CSS selector' :
+                undefined
+              }
+            />
+          )}
+
+          {fields.includes('attribute') && (
+            <TextField label="Attribute name" size="small" fullWidth
+              value={p.attribute ?? ''}
+              onChange={e => set({ attribute: e.target.value })}
+              placeholder="e.g. disabled, class, data-state"
+            />
+          )}
+
+          {fields.includes('value') && (
+            <TextField label="Actual value (to compare)" size="small" fullWidth
+              value={p.value ?? ''}
+              onChange={e => set({ value: e.target.value })}
+              placeholder="Value to check…"
+            />
+          )}
+
+          {fields.includes('regex') && (
+            <TextField label="Regex pattern" size="small" fullWidth
+              value={p.regex ?? ''}
+              onChange={e => set({ regex: e.target.value })}
+              placeholder="e.g. ^\d{4}-\d{2}-\d{2}$"
+              helperText="JavaScript regular expression (without /…/ delimiters)"
+            />
+          )}
+
+          {fields.includes('timeout') && (
             <Stack direction="row" spacing={1}>
-              <CoordField label="X (px)" value={p.x} onChange={x => set({ x })} />
-              <CoordField label="Y (px)" value={p.y} onChange={y => set({ y })} />
+              <TextField label="Timeout (ms)" type="number" size="small" sx={{ flex: 1 }}
+                value={p.timeout_ms ?? 5000}
+                onChange={e => set({ timeout_ms: Number(e.target.value) })}
+                inputProps={{ min: 500, step: 500 }}
+              />
+              {fields.includes('poll_interval') && (
+                <TextField label="Poll interval (ms)" type="number" size="small" sx={{ flex: 1 }}
+                  value={p.poll_interval_ms ?? 500}
+                  onChange={e => set({ poll_interval_ms: Number(e.target.value) })}
+                  inputProps={{ min: 100, step: 100 }}
+                />
+              )}
             </Stack>
+          )}
+
+          {fields.includes('negate') && (
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <input type="checkbox" id="negate-cb"
+                checked={!!p.negate}
+                onChange={e => set({ negate: e.target.checked })}
+              />
+              <Typography component="label" htmlFor="negate-cb" variant="body2" sx={{ cursor: 'pointer' }}>
+                Negate (PASS ↔ FAIL inversion)
+              </Typography>
+            </Stack>
+          )}
+
+          {/* Timeout override for non-wait_until assertions */}
+          {kind && kind !== 'assert_wait_until' && (
+            <TextField label="Step timeout (ms, optional)" type="number" size="small"
+              value={p.timeout_ms ?? ''}
+              onChange={e => set({ timeout_ms: e.target.value === '' ? undefined : Number(e.target.value) })}
+              helperText="Leave blank to use driver default"
+              inputProps={{ min: 1000, step: 1000 }}
+            />
           )}
         </Box>
       );
+    }
 
     case 'press_key':
       return (

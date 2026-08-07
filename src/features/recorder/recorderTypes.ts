@@ -12,9 +12,14 @@ export const CHROME_ACTIONS = [
   'navigate', 'click', 'fill', 'scroll', 'wait',
 ] as const;
 
+export const COMMON_RECORDER_ACTIONS = [
+  'screenshot', 'assertion',
+] as const;
+
 export type AndroidAction    = typeof ANDROID_ACTIONS[number];
 export type ChromeAction     = typeof CHROME_ACTIONS[number];
-export type RecordableAction = AndroidAction | ChromeAction;
+export type CommonRecorderAction = typeof COMMON_RECORDER_ACTIONS[number];
+export type RecordableAction = AndroidAction | ChromeAction | CommonRecorderAction;
 export type RecordableDriver = 'android' | 'browser';
 
 export interface RecordedParams {

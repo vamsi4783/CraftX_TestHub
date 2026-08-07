@@ -17,6 +17,9 @@ import type { ExecutionStep }          from '../execution/ExecutionTypes.js';
 import type { ExecutionContext }        from '../execution/ExecutionContext.js';
 import { NOOP_METRICS }                from '../execution/ExecutionMetrics.js';
 import { CancellationTokenSource }     from '../drivers/DriverCancellation.js';
+import { AssertionEngine }             from '../assertions/AssertionEngine.js';
+import { AssertionRegistry }           from '../assertions/AssertionRegistry.js';
+import type { AssertionParams }        from '../assertions/AssertionTypes.js';
 import {
   DEFAULT_RUNNER_CONFIG,
   makePauseResumeSignal,
@@ -35,13 +38,18 @@ import type {
 // ─── AutonomousRunnerEngine ───────────────────────────────────────────────────
 
 export class AutonomousRunnerEngine {
-  private readonly logger = new StructuredLogger('AutonomousRunnerEngine');
+  private readonly logger          = new StructuredLogger('AutonomousRunnerEngine');
+  private readonly assertionEngine: AssertionEngine;
 
   constructor(
     private readonly driverRegistry: DriverRegistry,
     private readonly stepExecutor:   StepExecutor,
     private readonly emitter:        IExecutionEventEmitter,
-  ) {}
+    /** Optional custom registry — defaults to the standard built-in registry. */
+    assertionRegistry?: AssertionRegistry,
+  ) {
+    this.assertionEngine = new AssertionEngine(assertionRegistry ?? new AssertionRegistry());
+  }
 
   /**
    * Execute steps one-by-one with full pause/resume/cancel/retry support.
@@ -223,7 +231,19 @@ export class AutonomousRunnerEngine {
           await this._delay(config.retryDelayMs);
         }
 
-        const stepResult = await this.stepExecutor.execute(driver, step, ctx);
+        // Assertion steps bypass StepExecutor and go through AssertionEngine.
+        // All other steps use StepExecutor (WAL + driver + event emit).
+        const stepResult = step.action.action === 'assertion'
+          ? AssertionEngine.toStepResult(
+              step.stepId, step.stepNumber, step.action.action,
+              await this.assertionEngine.evaluate(
+                step.action.params as AssertionParams,
+                driver,
+                step.stepId,
+                step.timeout_ms,
+              ),
+            )
+          : await this.stepExecutor.execute(driver, step, ctx);
         prog.duration_ms = stepResult.duration_ms;
 
         if (stepResult.success) {
