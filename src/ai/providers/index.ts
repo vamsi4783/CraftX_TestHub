@@ -1,0 +1,10 @@
+export { BaseProviderAdapter }  from './BaseProviderAdapter';
+export { GeminiAdapter }        from './GeminiAdapter';
+export { ClaudeAdapter }        from './ClaudeAdapter';
+export { OpenAIAdapter }        from './OpenAIAdapter';
+export { GitHubModelsAdapter }  from './GitHubModelsAdapter';
+export { OpenRouterAdapter }    from './OpenRouterAdapter';
+export { AzureOpenAIAdapter }   from './AzureOpenAIAdapter';
+export { OllamaAdapter }        from './OllamaAdapter';
+export { LMStudioAdapter }      from './LMStudioAdapter';
+export { VLLMAdapter }          from './VLLMAdapter';
