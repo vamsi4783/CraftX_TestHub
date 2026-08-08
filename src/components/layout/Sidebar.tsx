@@ -24,6 +24,7 @@ import ExtensionIcon from '@mui/icons-material/Extension';
 import VideoLabelIcon from '@mui/icons-material/VideoLabel';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import SmartToyIcon     from '@mui/icons-material/SmartToy';
+import CableIcon        from '@mui/icons-material/Cable';
 import AutoAwesomeIcon  from '@mui/icons-material/AutoAwesome';
 import AutoFixHighIcon  from '@mui/icons-material/AutoFixHigh';
 import TrendingUpIcon   from '@mui/icons-material/TrendingUp';
@@ -64,6 +65,7 @@ const NAV: NavItem[] = [
   { label: 'Healing Review',    path: '/healing-review',    icon: <AutoFixHighIcon /> },
   { label: 'Failure Analysis',  path: '/failure-analysis',  icon: <BugReportIcon /> },
   { label: 'Regression Analysis', path: '/regression-analysis', icon: <TrendingUpIcon /> },
+  { label: 'AI Connectors',       path: '/ai-connectors',       icon: <CableIcon />, dividerBefore: true },
   { label: 'Settings',         path: '/settings',     icon: <SettingsIcon /> },
 ];
 

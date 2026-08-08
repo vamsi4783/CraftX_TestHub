@@ -36,6 +36,7 @@ import { AITestGeneratorPage }  from '@/features/ai-test-generator/AITestGenerat
 import { HealingReviewPage }      from '@/features/healing-review/HealingReviewPage';
 import { FailureAnalysisPage }    from '@/features/failure-analysis/FailureAnalysisPage';
 import { RegressionDashboard }    from '@/features/regression-analysis/RegressionDashboard';
+import { AIConnectorsPage }       from '@/features/ai-connectors';
 
 // My Tests page (inline)
 import { useQuery } from '@tanstack/react-query';
@@ -187,6 +188,7 @@ export const router = createBrowserRouter([
       { path: 'healing-review',       element: <P><HealingReviewPage /></P> },
       { path: 'failure-analysis',    element: <P><FailureAnalysisPage /></P> },
       { path: 'regression-analysis', element: <P><RegressionDashboard /></P> },
+      { path: 'ai-connectors',       element: <P><AIConnectorsPage /></P> },
     ],
   },
   { path: '*', element: <Navigate to="/dashboard" replace /> },
