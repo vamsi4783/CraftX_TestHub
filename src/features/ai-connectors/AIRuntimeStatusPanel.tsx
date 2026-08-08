@@ -14,7 +14,7 @@ import { useState } from 'react';
 import {
   Box, Typography, Chip, Button, Paper, Divider,
   Table, TableBody, TableRow, TableCell, CircularProgress,
-  Alert, Tooltip,
+  Alert, Tooltip, FormControlLabel, Switch,
 } from '@mui/material';
 import CheckCircleIcon     from '@mui/icons-material/CheckCircle';
 import CancelIcon          from '@mui/icons-material/Cancel';
@@ -25,6 +25,7 @@ import BoltIcon            from '@mui/icons-material/Bolt';
 import ExtensionIcon       from '@mui/icons-material/Extension';
 import PlayArrowIcon       from '@mui/icons-material/PlayArrow';
 import { aiOrchestrationService, type RuntimeStatus, type TestAIResult, type CostCategory } from './aiOrchestrationService';
+import { aiRuntimePolicy } from './aiRuntimePolicy';
 
 // ─── Cost category labels & icons ────────────────────────────────────────────
 
@@ -61,8 +62,14 @@ interface Props {
 export function AIRuntimeStatusPanel({ refreshKey: _ }: Props) {
   const status: RuntimeStatus = aiOrchestrationService.getStatus();
 
-  const [testing,    setTesting]    = useState(false);
-  const [testResult, setTestResult] = useState<TestAIResult | null>(null);
+  const [testing,         setTesting]         = useState(false);
+  const [testResult,      setTestResult]       = useState<TestAIResult | null>(null);
+  const [edgeEnabled,     setEdgeEnabled]      = useState(status.edgeFunctionEnabled);
+
+  function handleEdgeToggle(enabled: boolean) {
+    aiRuntimePolicy.setEdgeFunctionEnabled(enabled);
+    setEdgeEnabled(enabled);
+  }
 
   async function handleTestAI() {
     setTesting(true);
@@ -116,13 +123,27 @@ export function AIRuntimeStatusPanel({ refreshKey: _ }: Props) {
         {!status.hasUsableConnectors && (
           <Chip
             icon={<WifiOffIcon sx={{ fontSize: 14 }} />}
-            label="No connectors — using edge function fallback"
+            label={edgeEnabled ? 'No connectors — edge function fallback active' : 'No connectors configured'}
             color="warning"
             size="small"
             variant="outlined"
             data-testid="no-connectors-chip"
           />
         )}
+
+        <Tooltip title={edgeEnabled
+          ? 'Edge-function fallback is ON — AI features will use the TestHub Supabase edge function (Anthropic key) when no connector succeeds.'
+          : 'Edge-function fallback is OFF — AI features will not call any TestHub-owned API key.'
+        }>
+          <Chip
+            icon={edgeEnabled ? <CheckCircleIcon sx={{ fontSize: 14 }} /> : <CancelIcon sx={{ fontSize: 14 }} />}
+            label={edgeEnabled ? 'Edge fallback: enabled' : 'Edge fallback: disabled'}
+            color={edgeEnabled ? 'warning' : 'default'}
+            size="small"
+            variant="outlined"
+            data-testid="edge-fallback-chip"
+          />
+        </Tooltip>
       </Box>
 
       {status.hasUsableConnectors ? (
@@ -208,10 +229,27 @@ export function AIRuntimeStatusPanel({ refreshKey: _ }: Props) {
           </Box>
         </>
       ) : (
-        <Typography variant="body2" color="text.secondary">
-          No connectors configured. Add a connector above to use AI features with your own API key or local model.
-          When no connector is active, AI features fall back to the TestHub Supabase edge function.
-        </Typography>
+        <>
+          <Typography variant="body2" color="text.secondary" mb={1.5}>
+            No connectors configured. Add a connector above to use AI features with your own API key or local model.
+            {edgeEnabled
+              ? ' Edge-function fallback is enabled — AI features will use the TestHub Supabase edge function when no connector succeeds.'
+              : ' Edge-function fallback is disabled — AI features will not call any TestHub-owned API key.'}
+          </Typography>
+          <Tooltip title="When enabled, AI features call a TestHub-owned Anthropic API key via Supabase edge functions. Enable only if you want this fallback.">
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={edgeEnabled}
+                  onChange={e => handleEdgeToggle(e.target.checked)}
+                  size="small"
+                  data-testid="edge-fallback-toggle"
+                />
+              }
+              label={<Typography variant="caption">Enable edge-function fallback (uses TestHub Anthropic key)</Typography>}
+            />
+          </Tooltip>
+        </>
       )}
     </Paper>
   );

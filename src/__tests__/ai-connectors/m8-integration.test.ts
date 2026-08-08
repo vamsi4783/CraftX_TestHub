@@ -20,6 +20,13 @@ vi.mock('../../lib/supabase', () => ({
   },
 }));
 
+vi.mock('../../features/ai-connectors/aiRuntimePolicy', () => ({
+  aiRuntimePolicy: {
+    isEdgeFunctionEnabled:  vi.fn(() => true),
+    setEdgeFunctionEnabled: vi.fn(),
+  },
+}));
+
 import { aiOrchestrationService } from '../../features/ai-connectors/aiOrchestrationService';
 import { supabase }               from '../../lib/supabase';
 import { AIAnalysisEngine }       from '../../services/failureAnalysis/AIAnalysisEngine';

@@ -13,6 +13,7 @@ import { FlowAnalyzer }      from './FlowAnalyzer.js';
 import { TestCaseGenerator } from './TestCaseGenerator.js';
 import { SuggestionEngine }  from './SuggestionEngine.js';
 import { aiOrchestrationService, parseJSONFromText } from '@/features/ai-connectors/aiOrchestrationService';
+import { aiRuntimePolicy } from '@/features/ai-connectors/aiRuntimePolicy';
 import type {
   ProjectModel,
   GenerationOptions,
@@ -98,8 +99,9 @@ export class AITestGenerationEngine {
       }
     }
 
-    // Path 2: Supabase Edge Function (used when no connectors configured, or as fallback)
-    if (rawSuggestions.length === 0 && aiModel === 'unknown') {
+    // Path 2: Supabase Edge Function — only when the user has explicitly enabled it.
+    // Disabled by default: calling this function uses a TestHub-owned Anthropic key.
+    if (rawSuggestions.length === 0 && aiModel === 'unknown' && aiRuntimePolicy.isEdgeFunctionEnabled()) {
       try {
         const { data, error } = await supabase.functions.invoke<EdgeFnResponse>(
           'ai-test-generator',
@@ -120,6 +122,9 @@ export class AITestGenerationEngine {
         aiModel        = 'unavailable';
       }
     }
+
+    // Both paths skipped or failed — mark as unavailable so callers can surface the state.
+    if (aiModel === 'unknown') aiModel = 'unavailable';
 
     // ── 4. Post-process ──────────────────────────────────────────────────────
     const processed = this.suggestionEngine.process(rawSuggestions, existingTestTitles);

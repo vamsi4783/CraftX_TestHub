@@ -35,6 +35,7 @@ import {
   DEFAULT_ORCHESTRATOR_CONFIG,
   AIConnectorError,
 } from '@/ai';
+import { aiRuntimePolicy } from './aiRuntimePolicy';
 import type {
   AIRequest,
   AIResponse,
@@ -72,6 +73,8 @@ export interface RuntimeStatus {
   userApiKeyConfigured: boolean;
   localModelAvailable: boolean;
   mcpAgentAvailable: boolean;
+  /** True only if the user has explicitly opted in via aiRuntimePolicy. */
+  edgeFunctionEnabled: boolean;
 }
 
 export interface TestAIResult {
@@ -298,6 +301,7 @@ class AIOrchestrationServiceImpl {
       userApiKeyConfigured:  all.some(c => secureCredentialStore.hasSecret(c.id)),
       localModelAvailable:   all.some(c => c.kind === 'ollama'),
       mcpAgentAvailable:     all.filter(c => c.kind === 'mcp').some(_isMCPUsable),
+      edgeFunctionEnabled:   aiRuntimePolicy.isEdgeFunctionEnabled(),
     };
   }
 

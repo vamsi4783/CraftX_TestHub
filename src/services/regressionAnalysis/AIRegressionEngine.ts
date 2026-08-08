@@ -5,6 +5,7 @@
 
 import { supabase }          from '@/lib/supabase';
 import { aiOrchestrationService, parseJSONFromText } from '@/features/ai-connectors/aiOrchestrationService';
+import { aiRuntimePolicy } from '@/features/ai-connectors/aiRuntimePolicy';
 import type { AIRegressionInsight, RegressionAIContext } from './RegressionAnalysisTypes';
 
 const FUNCTION_NAME = 'regression-analysis';
@@ -42,8 +43,15 @@ export class AIRegressionEngine {
       }
     }
 
-    // Path 2: Supabase Edge Function fallback
+    // Path 2: Supabase Edge Function — only when the user has explicitly enabled it.
+    // Disabled by default: calling this function uses a TestHub-owned Anthropic key.
     if (!orchestratorSucceeded) {
+      if (!aiRuntimePolicy.isEdgeFunctionEnabled()) {
+        throw new Error(
+          'AI unavailable: no usable connectors configured and edge-function fallback is disabled. ' +
+          'Configure a connector or enable the edge-function fallback in AI Settings.',
+        );
+      }
       const { data, error } = await supabase.functions.invoke<{
         insight:        RawInsight;
         model:          string;
