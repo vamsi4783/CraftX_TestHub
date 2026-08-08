@@ -28,6 +28,7 @@ import CableIcon        from '@mui/icons-material/Cable';
 import AutoAwesomeIcon  from '@mui/icons-material/AutoAwesome';
 import AutoFixHighIcon  from '@mui/icons-material/AutoFixHigh';
 import TrendingUpIcon   from '@mui/icons-material/TrendingUp';
+import AccountTreeIcon  from '@mui/icons-material/AccountTree';
 import { useAuth } from '@/hooks/useAuth';
 import { getInitials } from '@/lib/utils';
 
@@ -65,6 +66,7 @@ const NAV: NavItem[] = [
   { label: 'Healing Review',    path: '/healing-review',    icon: <AutoFixHighIcon /> },
   { label: 'Failure Analysis',  path: '/failure-analysis',  icon: <BugReportIcon /> },
   { label: 'Regression Analysis', path: '/regression-analysis', icon: <TrendingUpIcon /> },
+  { label: 'Project Intelligence', path: '/project-intelligence', icon: <AccountTreeIcon /> },
   { label: 'AI Connectors',       path: '/ai-connectors',       icon: <CableIcon />, dividerBefore: true },
   { label: 'Settings',         path: '/settings',     icon: <SettingsIcon /> },
 ];

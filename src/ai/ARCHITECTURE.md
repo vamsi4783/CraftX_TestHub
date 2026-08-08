@@ -513,3 +513,75 @@ Two new test files, 42 tests.
 1. stdio MCP is fully unsupported in the browser — requires a local bridge process (out of scope).
 2. MCP sampling (`sampling/createMessage`) relies on the connected server supporting the sampling capability; TestHub falls back to `tools/call` if sampling is absent.
 3. Classic SSE EventSource-based MCP servers are not supported — only Streamable HTTP (2025-03-26 spec). Modern MCP servers use Streamable HTTP.
+
+---
+
+## M10 — Project Ingestion & Project Intelligence (Phase 5.5 / Phase 6)
+
+### Overview
+
+M10 adds a complete project source ingestion subsystem that connects to ZIP archives, local folders (File System Access API), and GitHub repositories, produces a compact `ProjectKnowledge` model, and wires that knowledge into the AI Test Generator to replace manual file paste.
+
+**Critical policy enforced architecturally:**
+- Raw source file content is **NEVER** written to Supabase.
+- Only compact metadata, hashes, and per-file summaries (purpose + symbols, ~200 bytes/file) are persisted.
+- Sensitive files (detected by filename pattern or secret scanning) are excluded from AI context.
+- No new TestHub-owned AI API key is introduced — existing `aiOrchestrationService.execute()` handles AI phases.
+
+### New files
+
+| Layer | File | Role |
+|---|---|---|
+| DB | `supabase/migrations/015_m10_project_ingestion.sql` | 3 new tables: `project_sources`, `project_file_indexes`, `project_knowledge` |
+| Types | `src/services/projectIngestion/types.ts` | All domain types |
+| Interface | `src/services/projectIngestion/IProjectSourceProvider.ts` | Provider abstraction + `ProviderCapability` |
+| Security | `src/services/projectIngestion/SecretScanner.ts` | 22 secret patterns, 10 sensitive filename patterns |
+| Filter | `src/services/projectIngestion/IngestionFilterEngine.ts` | Include/exclude rules, .gitignore support, file classification |
+| Analysis | `src/services/projectIngestion/ProjectStructureAnalyzer.ts` | Static analysis — languages, frameworks, modules, entry points, dependencies |
+| Knowledge | `src/services/projectIngestion/ProjectKnowledgeBuilder.ts` | Builds `ProjectKnowledge` from file index + content |
+| Context | `src/services/projectIngestion/ProjectContextBuilder.ts` | Token-budget-aware AI context assembly |
+| DB | `src/services/projectIngestion/projectIngestionDbService.ts` | Supabase CRUD for M10 tables |
+| Orchestrator | `src/services/projectIngestion/ProjectIngestionService.ts` | Full pipeline: connect → scan → filter → analyze → index → understand → ready |
+| ZIP | `src/services/projectIngestion/providers/ZipProjectSourceProvider.ts` | fflate-based; path traversal rejection |
+| Local | `src/services/projectIngestion/providers/LocalProjectSourceProvider.ts` | File System Access API (Chrome/Edge) |
+| GitHub | `src/services/projectIngestion/providers/GitHubProjectSourceProvider.ts` | GitHub REST API (tree + contents) |
+| Stubs | `providers/GoogleDriveProjectSourceProvider.ts`, `OneDriveProjectSourceProvider.ts` | Future milestones |
+| UI | `src/features/project-ingestion/` | Store, progress panel, source cards, intelligence panel, add-source dialog, page |
+
+### Ingestion lifecycle
+
+```
+SOURCE_CONNECTED → SCANNING → FILTERING → ANALYZING → INDEXING → UNDERSTANDING → READY
+                                                                                 ↓ (on error)
+                                                                              FAILED / CANCELLED
+```
+
+### Storage policy (enforced)
+
+- `project_sources` — source record with status, stats, config. No raw bytes.
+- `project_file_indexes` — `entries: FileIndexEntry[]` JSONB (~80 bytes/file compact form). No content.
+- `project_knowledge` — summaries only: `fileSummaries[].{purpose, symbols, imports}`. No source code.
+
+### Security
+
+- `SecretScanner` runs before any file content reaches an AI model.
+- 22 regex patterns detect AWS, GitHub PAT, OpenAI/Anthropic keys, Stripe, Firebase, PEM, DB URLs, .env assignments.
+- 10 sensitive filename patterns (`.env`, `google-services.json`, `.pem`, keystore, etc.).
+- Findings show only a redacted preview (`sk-...abc`) — raw value never logged or stored.
+- GitHub PAT held in memory only for the session duration; never written to Supabase.
+
+### Test coverage (M10)
+
+7 new test files, 65 tests.
+
+| File | Tests |
+|---|---|
+| `SecretScanner.test.ts` | 16 |
+| `IngestionFilterEngine.test.ts` | 13 |
+| `ZipProvider.test.ts` | 8 |
+| `ProjectStructureAnalyzer.test.ts` | 5 |
+| `GitHubProvider.test.ts` | 7 |
+| `ProjectKnowledgeBuilder.test.ts` | 4 |
+| `ProjectContextBuilder.test.ts` | 6 |
+
+**Total test count: 934** (was 869)
