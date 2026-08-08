@@ -11,6 +11,9 @@ import { SecureString }               from '../security/SecureString';
 import { GeminiFlashConnector }       from '../providers/GeminiFlashConnector';
 import { OllamaConnector }            from '../providers/OllamaConnector';
 import { OpenAICompatibleConnector }  from '../providers/OpenAICompatibleConnector';
+import { GenericMCPConnector }        from '../agents/GenericMCPConnector';
+import { WebSocketMCPTransport }      from '../agents/transports/WebSocketMCPTransport';
+import { HttpMCPTransport }           from '../agents/transports/HttpMCPTransport';
 import type { Fetcher }               from '../providers/shared/streamUtils';
 
 export type ConnectorBuilder = (config: AIConnectorConfig) => IAIConnector;
@@ -49,7 +52,12 @@ export class AIConnectorFactory {
       return config.localEndpoint ? buildOpenAICompat(config) : buildOllama(config);
     }
 
-    // 3. Any provider with an API key → OpenAI-compat
+    // 3. MCP agent connectors
+    if (config.type === 'mcp_agent') {
+      return buildMCPConnector(config);
+    }
+
+    // 4. Any provider with an API key → OpenAI-compat
     if (config.type === 'api_provider' && config.userApiKey) {
       return buildOpenAICompat(config);
     }
@@ -86,6 +94,36 @@ export class AIConnectorFactory {
 }
 
 // ─── Builder functions ────────────────────────────────────────────────────────
+
+function buildMCPConnector(cfg: AIConnectorConfig): IAIConnector {
+  const transport = (cfg.metadata?.['mcpTransport'] as string | undefined) ?? 'sse';
+  const endpoint  = cfg.localEndpoint ?? (cfg.metadata?.['mcpEndpoint'] as string | undefined);
+
+  if (transport === 'stdio') {
+    throw new AIConnectorError(
+      'stdio MCP transport requires the execution agent bridge — not available in the browser.',
+      'NOT_IMPLEMENTED', cfg.id,
+    );
+  }
+
+  if (!endpoint) {
+    throw new AIConnectorError(
+      `MCP connector '${cfg.id}' requires an endpoint URL (localEndpoint or metadata.mcpEndpoint).`,
+      'NOT_IMPLEMENTED', cfg.id,
+    );
+  }
+
+  const opts = { authToken: cfg.userApiKey, timeoutMs: cfg.metadata?.['timeout'] as number | undefined };
+
+  if (transport === 'websocket') {
+    const adapter = new WebSocketMCPTransport(endpoint, opts);
+    return new GenericMCPConnector({ id: cfg.id, name: cfg.name, transport: 'websocket' }, adapter);
+  }
+
+  // Default: sse → Streamable HTTP
+  const adapter = new HttpMCPTransport(endpoint, opts);
+  return new GenericMCPConnector({ id: cfg.id, name: cfg.name, transport: 'sse' }, adapter);
+}
 
 function buildGemini(cfg: AIConnectorConfig): IAIConnector {
   if (!cfg.userApiKey) {

@@ -16,6 +16,7 @@ export function MCPConfigForm({ initial, onChange }: Props) {
     mcpTransport: initial?.mcpTransport ?? 'stdio',
     mcpEndpoint:  initial?.mcpEndpoint  ?? '',
     mcpCommand:   initial?.mcpCommand   ?? '',
+    authToken:    initial?.authToken    ?? undefined,
     priority:     initial?.priority     ?? 100,
     enabled:      initial?.enabled      ?? true,
   });
@@ -82,16 +83,27 @@ export function MCPConfigForm({ initial, onChange }: Props) {
       )}
 
       {(form.mcpTransport === 'sse' || form.mcpTransport === 'websocket') && (
-        <TextField
-          label="Endpoint URL"
-          value={form.mcpEndpoint}
-          onChange={e => update({ mcpEndpoint: e.target.value })}
-          required
-          fullWidth
-          placeholder={form.mcpTransport === 'sse' ? 'http://localhost:3000/sse' : 'ws://localhost:3000/ws'}
-          helperText="URL of the MCP server endpoint."
-          inputProps={{ 'data-testid': 'mcp-endpoint' }}
-        />
+        <>
+          <TextField
+            label="Endpoint URL"
+            value={form.mcpEndpoint}
+            onChange={e => update({ mcpEndpoint: e.target.value })}
+            required
+            fullWidth
+            placeholder={form.mcpTransport === 'sse' ? 'http://localhost:3000/sse' : 'ws://localhost:3000/ws'}
+            helperText="URL of the MCP server endpoint."
+            inputProps={{ 'data-testid': 'mcp-endpoint' }}
+          />
+          <TextField
+            label="Auth Token (optional)"
+            type="password"
+            value={form.authToken ?? ''}
+            onChange={e => update({ authToken: e.target.value || undefined })}
+            fullWidth
+            helperText="Bearer token for authenticated MCP servers. Leave blank for open servers."
+            inputProps={{ 'data-testid': 'mcp-auth-token' }}
+          />
+        </>
       )}
 
       <TextField
@@ -122,10 +134,12 @@ export function MCPConfigForm({ initial, onChange }: Props) {
         }
       />
 
-      <Alert severity="warning" sx={{ fontSize: 12 }}>
-        Live connection test for MCP requires a running server. Save the configuration
-        and use Agent Runtime to verify the connection.
-      </Alert>
+      {form.mcpTransport === 'stdio' && (
+        <Alert severity="warning" sx={{ fontSize: 12 }}>
+          stdio transport runs a subprocess locally — connection testing is not available in the browser.
+          Save the configuration and verify from the Agent Runtime panel.
+        </Alert>
+      )}
     </Box>
   );
 }

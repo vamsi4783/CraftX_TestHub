@@ -170,8 +170,8 @@ export function AIRuntimeStatusPanel({ refreshKey: _ }: Props) {
                     />
                   </TableCell>
                   <TableCell sx={{ py: 0.5 }}>
-                    {entry.kind === 'mcp' && (
-                      <Chip label="MCP — no text gen" size="small" variant="outlined" color="default" sx={{ fontSize: 10 }} />
+                    {entry.kind === 'mcp' && !entry.mcpUsable && (
+                      <Chip label="stdio — bridge required" size="small" variant="outlined" color="warning" sx={{ fontSize: 10 }} />
                     )}
                   </TableCell>
                 </TableRow>

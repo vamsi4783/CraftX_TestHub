@@ -74,20 +74,7 @@ export function AddConnectorDialog({ open, onClose, onAdded }: Props) {
   }
 
   async function discoverModels(endpoint: string): Promise<string[]> {
-    // Build a temporary Ollama connector to discover models
-    const temp = aiConnectorService.addOllama({
-      displayName: '__temp_discover',
-      endpoint,
-      model: 'llama3.2',
-      priority: 999,
-      enabled: false,
-    });
-    try {
-      const models = await aiConnectorService.discoverModels(temp.id);
-      return models;
-    } finally {
-      aiConnectorService.remove(temp.id);
-    }
+    return aiConnectorService.discoverModelsFromEndpoint(endpoint);
   }
 
   const kindLabel: Record<ConnectorKind, string> = {

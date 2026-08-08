@@ -85,10 +85,12 @@ describe('AIConnectorsPage — rendering', () => {
     expect(screen.getByText('Self Healing')).toBeInTheDocument();
   });
 
-  it('each feature readiness chip says migration pending', () => {
+  it('three features show live status, one shows pending', () => {
     renderPage();
-    const chips = screen.getAllByText(/Connector platform ready — feature migration pending/i);
-    expect(chips).toHaveLength(4);
+    const liveChips    = screen.getAllByText(/Live — routes through your connector/i);
+    const pendingChips = screen.getAllByText(/Pending — feature migration in progress/i);
+    expect(liveChips).toHaveLength(3);
+    expect(pendingChips).toHaveLength(1);
   });
 });
 

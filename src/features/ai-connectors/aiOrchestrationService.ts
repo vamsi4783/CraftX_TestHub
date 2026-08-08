@@ -17,9 +17,9 @@
  *                         ↓
  *       user-configured connector (Gemini / Ollama / OAI-compat)
  *
- * MCP connectors are registered but skipped for JSON text generation
- * (they require a live transport which cannot be set up in the browser).
- * MCP appears in the status panel and fallback chain display only.
+ * SSE/WebSocket MCP connectors with an endpoint are included in orchestration.
+ * stdio MCP connectors are skipped — they require a local bridge process.
+ * MCP connectors without an endpoint appear in the status panel only.
  *
  * Security:
  *   - API keys are retrieved from SecureCredentialStore; they flow to
@@ -57,6 +57,7 @@ export interface FallbackChainEntry {
   priority: number;
   enabled: boolean;
   costCategory: CostCategory;
+  mcpUsable?: boolean;
 }
 
 export interface RuntimeStatus {
@@ -70,6 +71,7 @@ export interface RuntimeStatus {
   requiresTestHubApiKey: false;
   userApiKeyConfigured: boolean;
   localModelAvailable: boolean;
+  mcpAgentAvailable: boolean;
 }
 
 export interface TestAIResult {
@@ -147,19 +149,18 @@ function toConfig(c: PersistedConnector): AIConnectorConfig {
       };
 
     case 'mcp':
-      // MCP is registered for discovery but the factory will fail to build it
-      // without a live transport — the service handles this gracefully below.
       return {
-        id:       c.id,
-        name:     c.displayName,
-        type:     'mcp_agent',
-        priority: c.priority,
-        enabled:  c.enabled,
-        authMode: 'none',
-        mcpConnection: {
-          transport: c.mcpTransport ?? 'stdio',
-          url:       c.mcpEndpoint,
-          command:   c.mcpCommand,
+        id:            c.id,
+        name:          c.displayName,
+        type:          'mcp_agent',
+        priority:      c.priority,
+        enabled:       c.enabled,
+        authMode:      apiKey ? 'api_key' : 'none',
+        userApiKey:    apiKey,
+        localEndpoint: c.mcpEndpoint,
+        metadata: {
+          mcpTransport: c.mcpTransport ?? 'stdio',
+          mcpEndpoint:  c.mcpEndpoint,
         },
       };
   }
@@ -176,17 +177,25 @@ const RUNTIME_CONFIG: OrchestratorConfig = {
   retry: { maxAttempts: 1, initialDelayMs: 0, backoffMultiplier: 1, maxDelayMs: 0 },
 };
 
-/** Sorted list of enabled, non-MCP connectors (the "usable" set for text generation). */
+/** SSE/WS MCP connectors with an endpoint URL are usable for text generation. */
+function _isMCPUsable(c: PersistedConnector): boolean {
+  if (c.kind !== 'mcp') return false;
+  const t = c.mcpTransport;
+  return (t === 'sse' || t === 'websocket') && !!c.mcpEndpoint;
+}
+
+/** Sorted list of enabled connectors usable for text generation. */
 function usableConnectors(): PersistedConnector[] {
   return aiConnectorStore
     .list()
-    .filter(c => c.enabled && c.kind !== 'mcp')
+    .filter(c => c.enabled && (c.kind !== 'mcp' || _isMCPUsable(c)))
     .sort((a, b) => a.priority - b.priority);
 }
 
 class AIOrchestrationServiceImpl {
   private _orchestrator: AIOrchestrator | null = null;
   private _dirty = true;
+  private _building: Promise<AIOrchestrator> | null = null;
 
   /**
    * Mark the cached orchestrator dirty so the next execute() rebuilds it.
@@ -194,7 +203,8 @@ class AIOrchestrationServiceImpl {
    */
   invalidate(): void {
     this._orchestrator = null;
-    this._dirty = true;
+    this._building     = null;
+    this._dirty        = true;
   }
 
   /** True if there is at least one enabled, non-MCP connector configured. */
@@ -202,16 +212,20 @@ class AIOrchestrationServiceImpl {
     return usableConnectors().length > 0;
   }
 
-  private _buildOrchestrator(): AIOrchestrator {
+  private async _buildOrchestrator(): Promise<AIOrchestrator> {
     const registry = new AIConnectorRegistry();
 
     for (const c of usableConnectors()) {
       try {
         const cfg       = toConfig(c);
         const connector = AIConnectorFactory.fromConfig(cfg);
+        // Eagerly connect MCP transports before registering.
+        if (c.kind === 'mcp') {
+          await (connector as unknown as { connect?: () => Promise<void> }).connect?.();
+        }
         registry.register(connector, { priority: c.priority, enabled: true });
       } catch (err) {
-        // Connector fails to build (e.g. missing fields) — skip and warn.
+        // Connector fails to build or connect — skip and warn.
         // Do NOT log the raw error; it might contain key material.
         const safe = (err instanceof Error ? err.message : String(err))
           .replace(/Bearer\s+\S+/gi, 'Bearer [REDACTED]');
@@ -222,12 +236,22 @@ class AIOrchestrationServiceImpl {
     return new AIOrchestrator(registry, RUNTIME_CONFIG);
   }
 
-  private _ensureOrchestrator(): AIOrchestrator | null {
+  private async _ensureOrchestrator(): Promise<AIOrchestrator | null> {
     if (!this.hasUsableConnectors()) return null;
     if (!this._dirty && this._orchestrator) return this._orchestrator;
-    this._orchestrator = this._buildOrchestrator();
-    this._dirty = false;
-    return this._orchestrator;
+    // Coalesce concurrent build calls so MCP connectors are only connected once.
+    if (!this._building) {
+      this._building = this._buildOrchestrator().then(orch => {
+        this._orchestrator = orch;
+        this._dirty        = false;
+        this._building     = null;
+        return orch;
+      }, err => {
+        this._building = null;
+        throw err;
+      });
+    }
+    return this._building;
   }
 
   /**
@@ -241,7 +265,7 @@ class AIOrchestrationServiceImpl {
    * back to the Supabase edge function path).
    */
   async execute(request: AIRequest): Promise<AIResponse> {
-    const orch = this._ensureOrchestrator();
+    const orch = await this._ensureOrchestrator();
     if (!orch) {
       throw new AIConnectorError('No usable AI connectors configured', 'NO_CONNECTORS');
     }
@@ -251,7 +275,7 @@ class AIOrchestrationServiceImpl {
   /** Current runtime status for the UI status panel. */
   getStatus(): RuntimeStatus {
     const all    = aiConnectorStore.list().filter(c => c.enabled).sort((a, b) => a.priority - b.priority);
-    const usable = all.filter(c => c.kind !== 'mcp');
+    const usable = all.filter(c => c.kind !== 'mcp' || _isMCPUsable(c));
 
     return {
       hasConnectors:        all.length > 0,
@@ -264,14 +288,16 @@ class AIOrchestrationServiceImpl {
         displayName:  c.displayName,
         kind:         c.kind,
         model:        c.model,
-        endpoint:     c.endpoint ?? c.baseUrl,
+        endpoint:     c.endpoint ?? c.baseUrl ?? c.mcpEndpoint,
         priority:     c.priority,
         enabled:      c.enabled,
         costCategory: inferCostCategory(c),
+        mcpUsable:    c.kind === 'mcp' ? _isMCPUsable(c) : undefined,
       })),
       requiresTestHubApiKey: false,
       userApiKeyConfigured:  all.some(c => secureCredentialStore.hasSecret(c.id)),
       localModelAvailable:   all.some(c => c.kind === 'ollama'),
+      mcpAgentAvailable:     all.filter(c => c.kind === 'mcp').some(_isMCPUsable),
     };
   }
 

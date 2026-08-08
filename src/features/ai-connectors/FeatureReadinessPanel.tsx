@@ -6,28 +6,49 @@ import BugReportIcon from '@mui/icons-material/BugReport';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 
-const FEATURES = [
+type Readiness = 'ready' | 'pending';
+
+const FEATURES: {
+  label:       string;
+  icon:        JSX.Element;
+  description: string;
+  readiness:   Readiness;
+}[] = [
   {
     label:       'AI Test Generation',
     icon:        <AutoAwesomeIcon />,
-    description: 'Automatically generate test cases from recorded flows.',
+    description: 'Automatically generate test cases from source files and recorded flows.',
+    readiness:   'ready',
   },
   {
     label:       'Failure Analysis',
     icon:        <BugReportIcon />,
-    description: 'Analyse failed test runs and suggest root causes.',
+    description: 'Analyse failed test runs and suggest root causes with confidence scores.',
+    readiness:   'ready',
   },
   {
     label:       'Regression Analysis',
     icon:        <TrendingUpIcon />,
     description: 'Detect regressions and score risk across releases.',
+    readiness:   'ready',
   },
   {
     label:       'Self Healing',
     icon:        <AutoFixHighIcon />,
     description: 'Automatically repair broken selectors and step definitions.',
+    readiness:   'pending',
   },
-] as const;
+];
+
+const LABEL: Record<Readiness, string> = {
+  ready:   'Live — routes through your connector',
+  pending: 'Pending — feature migration in progress',
+};
+
+const COLOR: Record<Readiness, 'success' | 'info'> = {
+  ready:   'success',
+  pending: 'info',
+};
 
 export function FeatureReadinessPanel() {
   return (
@@ -48,9 +69,9 @@ export function FeatureReadinessPanel() {
                   {f.description}
                 </Typography>
                 <Chip
-                  label="Connector platform ready — feature migration pending"
+                  label={LABEL[f.readiness]}
                   size="small"
-                  color="info"
+                  color={COLOR[f.readiness]}
                   variant="outlined"
                   data-testid={`readiness-chip-${f.label.toLowerCase().replace(/\s+/g, '-')}`}
                 />

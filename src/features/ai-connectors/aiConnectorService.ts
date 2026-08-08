@@ -53,6 +53,7 @@ export interface AddMCPParams {
   mcpTransport: 'stdio' | 'sse' | 'websocket';
   mcpEndpoint?: string;
   mcpCommand?: string;
+  authToken?: string;
   priority: number;
   enabled: boolean;
 }
@@ -121,16 +122,17 @@ function toAIConnectorConfig(c: PersistedConnector): AIConnectorConfig {
 
     case 'mcp':
       return {
-        id:       c.id,
-        name:     c.displayName,
-        type:     'mcp_agent',
-        priority: c.priority,
-        enabled:  c.enabled,
-        authMode: 'none',
-        mcpConnection: {
-          transport: c.mcpTransport ?? 'stdio',
-          url:       c.mcpEndpoint,
-          command:   c.mcpCommand,
+        id:            c.id,
+        name:          c.displayName,
+        type:          'mcp_agent',
+        priority:      c.priority,
+        enabled:       c.enabled,
+        authMode:      apiKey ? 'api_key' : 'none',
+        userApiKey:    apiKey,
+        localEndpoint: c.mcpEndpoint,
+        metadata: {
+          mcpTransport: c.mcpTransport ?? 'stdio',
+          mcpEndpoint:  c.mcpEndpoint,
         },
       };
   }
@@ -266,6 +268,7 @@ export const aiConnectorService = {
       updatedAt:    now,
     };
     aiConnectorStore.add(record);
+    if (params.authToken) secureCredentialStore.store(id, params.authToken);
     return record;
   },
 
@@ -307,11 +310,26 @@ export const aiConnectorService = {
     if (!record) return { success: false, errorMessage: 'Connector not found' };
 
     if (record.kind === 'mcp') {
-      return {
-        success: false,
-        errorMessage: 'Live MCP test requires a running transport — save configuration and test from the agent runtime.',
-        suggestedFix: 'Start the MCP server and use Agent Runtime to verify.',
-      };
+      const t = record.mcpTransport;
+      if (t === 'stdio' || !record.mcpEndpoint) {
+        return {
+          success: false,
+          errorMessage: 'stdio MCP transport requires the execution agent bridge — not available in the browser.',
+          suggestedFix: 'Start the MCP server with an SSE or WebSocket transport and provide an endpoint URL.',
+        };
+      }
+      // SSE/WebSocket: build connector, connect, health check, disconnect
+      try {
+        const cfg       = toAIConnectorConfig(record);
+        const connector = AIConnectorFactory.fromConfig(cfg);
+        await (connector as unknown as { connect?: () => Promise<void> }).connect?.();
+        const health = await connector.health();
+        await (connector as unknown as { disconnect?: () => Promise<void> }).disconnect?.();
+        return { success: health.status === 'connected', health };
+      } catch (err) {
+        const { message, suggested } = toReadableError(err);
+        return { success: false, errorMessage: message, suggestedFix: suggested };
+      }
     }
 
     try {
@@ -344,11 +362,26 @@ export const aiConnectorService = {
   async discoverModels(id: string): Promise<string[]> {
     const record = aiConnectorStore.get(id);
     if (!record || record.kind !== 'ollama') return [];
+    return this.discoverModelsFromEndpoint(record.endpoint ?? 'http://localhost:11434');
+  },
+
+  /**
+   * Discover Ollama models from a raw endpoint URL without touching the store.
+   * Use this during connector configuration (before the connector is saved).
+   */
+  async discoverModelsFromEndpoint(endpoint: string): Promise<string[]> {
     try {
-      const cfg       = toAIConnectorConfig(record);
-      // Build an OllamaConnector and call listModels
+      const cfg: AIConnectorConfig = {
+        id:            '__discovery__',
+        name:          'Discovery',
+        type:          'local_model',
+        priority:      999,
+        enabled:       false,
+        authMode:      'none',
+        localEndpoint: endpoint,
+        metadata:      { model: 'llama3.2' },
+      };
       const connector = AIConnectorFactory.fromConfig(cfg);
-      // OllamaConnector exposes listModels() — cast via duck-typing
       const c = connector as unknown as { listModels?: () => Promise<string[]> };
       return (await c.listModels?.()) ?? [];
     } catch {

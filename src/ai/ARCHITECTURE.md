@@ -408,3 +408,108 @@ The M1–M4 AI Connector Platform is production-ready for its intended scope:
 5. Gemini endpoint is not proxy-configurable
 
 **No blocking issues for Phase 5.5 M6 (MCP implementation).**
+
+---
+
+## Phase 5.5 M6 — MCP Agent Integration
+
+M6 promotes MCP from a display-only placeholder to a first-class AI connector that participates in text generation when configured with a reachable transport.
+
+### Design principle: provider-agnostic
+
+Features (M6/M8/M9) continue to call `aiOrchestrationService.execute()` unchanged. The orchestrator transparently includes MCP agents in the fallback chain alongside Gemini, Ollama, and OAI-compat connectors. No feature knows whether its response came from an API provider or an MCP server.
+
+### Transport layer
+
+Two browser-compatible transports were added under `src/ai/agents/transports/`:
+
+| Class | File | Protocol | Auth |
+|---|---|---|---|
+| `HttpMCPTransport` | `transports/HttpMCPTransport.ts` | HTTP POST (MCP Streamable HTTP, spec 2025-03-26) | `Authorization: Bearer` header |
+| `WebSocketMCPTransport` | `transports/WebSocketMCPTransport.ts` | Native browser WebSocket, JSON-RPC 2.0 | `?token=` query param |
+
+**Why not stdio?** Browsers cannot spawn subprocesses. `AIConnectorFactory` throws `NOT_IMPLEMENTED` with a clear message for stdio configs — the user is prompted to configure SSE or WebSocket instead.
+
+**Why not classic SSE EventSource?** The original MCP SSE transport requires a persistent EventSource connection and a separate POST channel. The newer Streamable HTTP transport (2025-03-26) is a simple POST→JSON response — correct behaviour at much lower complexity, and fully compatible with modern MCP servers.
+
+**Security:**
+- WebSocket auth token is in `?token=` query param (browsers cannot set WebSocket handshake headers).
+- HTTP auth token is in `Authorization: Bearer` — never in URL or request body.
+- Both tokens are sourced from `SecureCredentialStore`, never from localStorage.
+- Auth tokens never appear in error messages or logs.
+- Response size bounded to 1 MiB to prevent memory exhaustion.
+
+### Factory dispatch
+
+`AIConnectorFactory.fromConfig()` gained a new dispatch branch:
+
+```typescript
+if (config.type === 'mcp_agent') return buildMCPConnector(config);
+```
+
+`buildMCPConnector` creates the appropriate transport from `metadata.mcpTransport` ('sse' → `HttpMCPTransport`, 'websocket' → `WebSocketMCPTransport`, 'stdio' → throws).
+
+### _isMCPUsable filter
+
+An MCP connector is "usable" for text generation iff:
+- `mcpTransport` is `'sse'` or `'websocket'`, AND
+- `mcpEndpoint` is a non-empty string
+
+stdio and endpoint-less MCP connectors appear in `getStatus().fallbackChain` (for visibility) but are excluded from `usableConnectors()` (and therefore from the orchestrator).
+
+This preserves backwards compatibility: tests that create bare MCP connectors without transport/endpoint continue to see them excluded, matching pre-M6 behaviour.
+
+### Orchestrator changes
+
+`_buildOrchestrator()` is now `async`. For each usable MCP connector, it calls `connector.connect()` before registering it. If the connect fails (server down, auth error), the connector is skipped with a sanitised warning — identical to how build failures are handled for other connector types.
+
+`_ensureOrchestrator()` and `execute()` are correspondingly async. No external API changes — callers were already awaiting `execute()`.
+
+### M6/M8/M9 routing
+
+`GenericMCPConnector.capabilities()` returns `supportsJSON: true`, so MCP connectors are eligible for the `caps => caps.supportsJSON` filter used by all three AI engines. An MCP agent with text generation capability participates in the normal priority-ordered fallback chain.
+
+### Auth token flow
+
+```
+AddConnectorDialog  →  aiConnectorService.addMCP({ authToken })
+                              ↓
+                    SecureCredentialStore.store(id, authToken)
+                              ↓
+            (on orchestrator build)
+                    secureCredentialStore.retrieve(id)?.reveal()
+                              ↓
+                    AIConnectorFactory.fromConfig({ userApiKey: ... })
+                              ↓
+            HttpMCPTransport / WebSocketMCPTransport constructor
+                    (never exposed further)
+```
+
+### RuntimeStatus additions
+
+`RuntimeStatus` gained:
+- `mcpAgentAvailable: boolean` — true when at least one enabled SSE/WS MCP connector has an endpoint
+- `FallbackChainEntry.mcpUsable?: boolean` — per-connector usability flag for the status panel
+
+### UI changes
+
+- `MCPConfigForm` — optional "Auth Token" password field shown for SSE/WebSocket transports; stdio transport shows a "browser cannot test" warning.
+- `AIRuntimeStatusPanel` — MCP entries without a usable transport show "stdio — bridge required" chip instead of the old "MCP — no text gen" chip; usable MCP connectors show no extra chip (they appear as normal chain entries).
+- `aiConnectorService.testConnection()` for SSE/WS MCP — actually attempts to connect, runs a health check, then disconnects. stdio continues to return a descriptive failure immediately.
+
+### Test coverage (M6)
+
+Two new test files, 42 tests.
+
+| File | Tests | Coverage |
+|---|---|---|
+| `__tests__/ai/mcp-transport.test.ts` | 27 | HttpMCPTransport and WebSocketMCPTransport: URL validation, connect/disconnect, request/response, error handling, auth header, auth token security |
+| `__tests__/ai/mcp-orchestration.test.ts` | 15 | Factory dispatch, stdio rejection, _isMCPUsable filter, mcpAgentAvailable status, capabilities (supportsJSON=true), connect+health flow |
+
+**Total test count: 784** (was 742)
+
+### Known limitations
+
+1. stdio MCP is fully unsupported in the browser — requires a local bridge process (out of scope).
+2. MCP sampling (`sampling/createMessage`) relies on the connected server supporting the sampling capability; TestHub falls back to `tools/call` if sampling is absent.
+3. Classic SSE EventSource-based MCP servers are not supported — only Streamable HTTP (2025-03-26 spec). Modern MCP servers use Streamable HTTP.
