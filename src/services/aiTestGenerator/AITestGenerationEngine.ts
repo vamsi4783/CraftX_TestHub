@@ -12,6 +12,7 @@ import { ProjectAnalyzer }   from './ProjectAnalyzer.js';
 import { FlowAnalyzer }      from './FlowAnalyzer.js';
 import { TestCaseGenerator } from './TestCaseGenerator.js';
 import { SuggestionEngine }  from './SuggestionEngine.js';
+import { aiOrchestrationService, parseJSONFromText } from '@/features/ai-connectors/aiOrchestrationService';
 import type {
   ProjectModel,
   GenerationOptions,
@@ -73,30 +74,51 @@ export class AITestGenerationEngine {
     let rawSuggestions: TestSuggestion[] = [];
     let aiModel = 'unknown';
 
-    try {
-      const req: GenerationRequest = {
-        projectModel:       enriched,
-        options,
-        existingTestTitles,
-      };
+    const req: GenerationRequest = {
+      projectModel:       enriched,
+      options,
+      existingTestTitles,
+    };
 
-      const { data, error } = await supabase.functions.invoke<EdgeFnResponse>(
-        'ai-test-generator',
-        { body: { ...req, prompt, sessionId } },
-      );
-
-      if (error) throw new Error(error.message);
-      if (data?.suggestions) {
-        // Edge function returns parsed suggestions; parse as strings if raw
-        const rawJson = JSON.stringify({ suggestions: data.suggestions });
+    // Path 1: user-configured connector via AIOrchestrationService (no TestHub API key)
+    if (aiOrchestrationService.hasUsableConnectors()) {
+      try {
+        const response = await aiOrchestrationService.execute({
+          requestId:    sessionId,
+          task:         'test_generation',
+          systemPrompt: 'You are an expert QA engineer. Return ONLY valid JSON as instructed in the user message. No explanation, no markdown, no code fences.',
+          userPrompt:   prompt,
+        });
+        const parsed   = parseJSONFromText(response.text) as { suggestions?: unknown[] };
+        const rawJson  = JSON.stringify({ suggestions: parsed.suggestions ?? [] });
         rawSuggestions = this.generator.parseResponse(rawJson, sessionId);
-        aiModel        = data.model ?? 'claude';
+        aiModel        = response.model;
+      } catch {
+        // Orchestrator failed — fall through to edge function path
       }
-    } catch (_err) {
-      // Edge function unavailable: return empty suggestions (not an error)
-      // Callers should surface this to the user as "AI unavailable"
-      rawSuggestions = [];
-      aiModel        = 'unavailable';
+    }
+
+    // Path 2: Supabase Edge Function (used when no connectors configured, or as fallback)
+    if (rawSuggestions.length === 0 && aiModel === 'unknown') {
+      try {
+        const { data, error } = await supabase.functions.invoke<EdgeFnResponse>(
+          'ai-test-generator',
+          { body: { ...req, prompt, sessionId } },
+        );
+
+        if (error) throw new Error(error.message);
+        if (data?.suggestions) {
+          // Edge function returns parsed suggestions; parse as strings if raw
+          const rawJson = JSON.stringify({ suggestions: data.suggestions });
+          rawSuggestions = this.generator.parseResponse(rawJson, sessionId);
+          aiModel        = data.model ?? 'claude';
+        }
+      } catch {
+        // Edge function unavailable: return empty suggestions (not an error)
+        // Callers should surface this to the user as "AI unavailable"
+        rawSuggestions = [];
+        aiModel        = 'unavailable';
+      }
     }
 
     // ── 4. Post-process ──────────────────────────────────────────────────────

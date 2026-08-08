@@ -11,7 +11,9 @@ import { ConnectorCard } from './ConnectorCard';
 import { AddConnectorDialog } from './AddConnectorDialog';
 import { DiagnosticsDialog } from './DiagnosticsDialog';
 import { FeatureReadinessPanel } from './FeatureReadinessPanel';
+import { AIRuntimeStatusPanel }  from './AIRuntimeStatusPanel';
 import { useAIConnectors } from './useAIConnectors';
+import { aiOrchestrationService } from './aiOrchestrationService';
 import type { PersistedConnector } from './aiConnectorStore';
 
 export function AIConnectorsPage() {
@@ -102,14 +104,16 @@ export function AIConnectorsPage() {
         </Box>
       )}
 
-      <Divider />
+      <AIRuntimeStatusPanel refreshKey={connectors.length} />
+
+      <Divider sx={{ mt: 3 }} />
       <FeatureReadinessPanel />
 
       {/* Dialogs */}
       <AddConnectorDialog
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        onAdded={reload}
+        onAdded={() => { aiOrchestrationService.invalidate(); reload(); }}
       />
 
       <DiagnosticsDialog

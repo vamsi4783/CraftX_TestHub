@@ -1,8 +1,10 @@
 // ─── AIAnalysisEngine (Phase 4 M8) ────────────────────────────────────────────
-// Calls the failure-analysis Supabase Edge Function (which holds ANTHROPIC_API_KEY).
-// Parses structured JSON response back to AIAnalysisResult.
+// Routes through AIOrchestrationService (user-configured connectors) first.
+// Falls back to the failure-analysis Supabase Edge Function when no connectors
+// are configured or when the orchestrator fails.
 
 import { supabase } from '@/lib/supabase';
+import { aiOrchestrationService, parseJSONFromText } from '@/features/ai-connectors/aiOrchestrationService';
 import type { AIAnalysisResult, AnalysisContext } from './FailureAnalysisTypes';
 import { ContextBuilder } from './ContextBuilder';
 
@@ -26,18 +28,40 @@ export class AIAnalysisEngine {
   async analyze(context: AnalysisContext): Promise<AIAnalysisResult> {
     const prompt = this.contextBuilder.buildPrompt(context);
 
-    const { data, error } = await supabase.functions.invoke<{
-      analysis:       RawAIResponse;
-      model:          string;
-      generationTime: number;
-    }>(FUNCTION_NAME, {
-      body: { prompt, runId: context.runId },
-    });
+    let raw: RawAIResponse = {};
+    let orchestratorSucceeded = false;
 
-    if (error) throw new Error(`AIAnalysisEngine: edge function error — ${error.message}`);
-    if (!data)  throw new Error('AIAnalysisEngine: no data returned from edge function');
+    // Path 1: user-configured connector via AIOrchestrationService
+    if (aiOrchestrationService.hasUsableConnectors()) {
+      try {
+        const response = await aiOrchestrationService.execute({
+          requestId:    context.runId,
+          task:         'failure_analysis',
+          systemPrompt: 'You are an expert QA failure analysis AI. Return ONLY valid JSON as instructed. No explanation, no markdown, no code fences.',
+          userPrompt:   prompt,
+        });
+        raw = parseJSONFromText(response.text) as RawAIResponse;
+        orchestratorSucceeded = true;
+      } catch {
+        // Orchestrator failed — fall through to edge function
+      }
+    }
 
-    const raw = data.analysis ?? {};
+    // Path 2: Supabase Edge Function fallback
+    if (!orchestratorSucceeded) {
+      const { data, error } = await supabase.functions.invoke<{
+        analysis:       RawAIResponse;
+        model:          string;
+        generationTime: number;
+      }>(FUNCTION_NAME, {
+        body: { prompt, runId: context.runId },
+      });
+
+      if (error) throw new Error(`AIAnalysisEngine: edge function error — ${error.message}`);
+      if (!data)  throw new Error('AIAnalysisEngine: no data returned from edge function');
+
+      raw = data.analysis ?? {};
+    }
 
     return {
       rootCause:             String(raw.rootCause              ?? 'Root cause could not be determined.'),

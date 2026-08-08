@@ -171,3 +171,93 @@ Seven new test files, 170+ deterministic tests. Zero real HTTP calls — all con
 | `__tests__/ai/factory.test.ts` | ~25 |
 | `__tests__/ai/health-monitor.test.ts` | ~28 |
 | `__tests__/ai/diagnostics.test.ts` | ~20 |
+
+---
+
+## Phase 5.5 M4 — AI Connector Runtime Integration
+
+M4 wires the AI Connector Platform into TestHub's live AI features (M6 Test Generator, M8 Failure Analysis, M9 Regression Analysis). Before M4, all three features called Supabase edge functions directly; after M4, they route through `AIOrchestrationService` first and fall back to edge functions only when no connectors are configured.
+
+### Product principle: no TestHub-owned API key required
+
+TestHub does NOT need to own an Anthropic/OpenAI API key for normal AI operation. Users bring their own keys (Gemini, OpenAI-compatible) or run local models (Ollama). The edge function fallback path uses `ANTHROPIC_API_KEY` stored in Deno environment — only active when the user has not configured any connector.
+
+### AIOrchestrationService (`src/features/ai-connectors/aiOrchestrationService.ts`)
+
+Singleton bridge between the feature layer (M6/M8/M9) and the connector platform.
+
+**Connector lifecycle:**
+1. `aiConnectorStore.list()` — reads persisted connector configurations
+2. Filter to enabled, non-MCP connectors sorted by priority
+3. `AIConnectorFactory.fromConfig(toConfig(c))` — builds live `IAIConnector` instances, injecting credentials from `SecureCredentialStore`
+4. Register in `AIConnectorRegistry` → `AIOrchestrator(registry, RUNTIME_CONFIG)`
+
+`RUNTIME_CONFIG` has `fallbackEnabled: true`, `requireHealthCheck: false`, `timeoutMs: 30_000`, `retry.maxAttempts: 1` (service layer relies on multi-connector fallback, not per-connector retry).
+
+**Credential flow:** API keys are retrieved via `SecureCredentialStore.retrieve(connectorId)` which returns a `SecureString`. The `SecureString.reveal()` method is called only inside `AIConnectorFactory` when building the connector — never passed through the orchestrator, never logged, never included in `AIRequest`.
+
+**Orchestrator flow:**
+```
+AIOrchestrationService.execute(request)
+  → _buildOrchestrator() (lazy, invalidated on connector changes)
+  → AIOrchestrator.execute(request, caps => caps.supportsJSON)
+  → tries connectors in priority order (Ollama first by default)
+  → returns AIResponse { text, provider, connector, model, latency }
+```
+
+**Invalidation:** `aiOrchestrationService.invalidate()` is called when connectors are added, removed, toggled, or re-prioritised. `useAIConnectors` and `AddConnectorDialog` call it automatically.
+
+### M6/M8/M9 two-path routing
+
+Each engine follows the same pattern:
+
+```typescript
+let orchestratorSucceeded = false;
+if (aiOrchestrationService.hasUsableConnectors()) {
+  try {
+    const response = await aiOrchestrationService.execute({ ... });
+    raw = parseJSONFromText(response.text);
+    orchestratorSucceeded = true;
+  } catch { /* fall through */ }
+}
+if (!orchestratorSucceeded) {
+  // Supabase edge function fallback
+}
+```
+
+`parseJSONFromText` strips markdown code fences before `JSON.parse` — handles LLMs that wrap JSON in \`\`\`json blocks.
+
+### Free/local-first priority
+
+Default connector priority:
+1. **Ollama** (local) — zero cost, zero latency, fully private
+2. **Gemini** (free tier) — Google's free quota
+3. **User API key** (OpenAI-compatible / Gemini paid) — user's own billing
+
+The orchestrator respects the user's configured priority order; this is only the suggested default.
+
+### MCP architecture
+
+MCP connectors are **registered for display** in `getStatus().fallbackChain` but **excluded from text generation** (`usableConnectors()` filters `kind !== 'mcp'`). Browser-accessible MCP transports do not exist in M4; MCP is a future capability placeholder.
+
+### GitHub is NOT a runtime dependency
+
+TestHub does not call any GitHub API at runtime. GitHub is used only for source control and CI. AI features have no dependency on GitHub Copilot or any GitHub service.
+
+### Security boundaries
+
+- API keys stored in `sessionStorage` via `SecureCredentialStore`, never `localStorage` or cookies
+- `SecureString.toString()` / `toJSON()` always return `[REDACTED]`
+- `executeTestPrompt()` strips `Bearer \S+` patterns from all error messages before returning
+- Keys never appear in `AIRequest`, logs, telemetry, URLs, or browser DOM
+
+### Test coverage (M4)
+
+Three new integration test files, 80+ tests.
+
+| File | Tests | Coverage |
+|---|---|---|
+| `__tests__/ai-connectors/aiOrchestrationService.test.ts` | ~40 | Service unit: connector selection, priority, fallback, security, status |
+| `__tests__/ai-connectors/m6-integration.test.ts` | ~8 | M6 routing: orchestrator path, edge fallback, both-fail, no direct imports |
+| `__tests__/ai-connectors/m8-integration.test.ts` | ~7 | M8 routing: orchestrator path, edge fallback, safe defaults, confidence clamp |
+| `__tests__/ai-connectors/m9-integration.test.ts` | ~8 | M9 routing: orchestrator path, edge fallback, requestId format, safe defaults |

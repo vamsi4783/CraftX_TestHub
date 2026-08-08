@@ -1,8 +1,10 @@
 // ─── AIRegressionEngine (Phase 4 M9) ─────────────────────────────────────────
-// Calls the regression-analysis Supabase Edge Function.
+// Routes through AIOrchestrationService (user-configured connectors) first.
+// Falls back to the regression-analysis Supabase Edge Function.
 // AI augments deterministic results — never replaces them.
 
 import { supabase }          from '@/lib/supabase';
+import { aiOrchestrationService, parseJSONFromText } from '@/features/ai-connectors/aiOrchestrationService';
 import type { AIRegressionInsight, RegressionAIContext } from './RegressionAnalysisTypes';
 
 const FUNCTION_NAME = 'regression-analysis';
@@ -21,16 +23,38 @@ export class AIRegressionEngine {
   async analyze(context: RegressionAIContext): Promise<AIRegressionInsight> {
     const prompt = this._buildPrompt(context);
 
-    const { data, error } = await supabase.functions.invoke<{
-      insight:        RawInsight;
-      model:          string;
-      generationTime: number;
-    }>(FUNCTION_NAME, { body: { prompt, fromVersion: context.fromVersion, toVersion: context.toVersion } });
+    let raw: RawInsight = {};
+    let orchestratorSucceeded = false;
 
-    if (error) throw new Error(`AIRegressionEngine: ${error.message}`);
-    if (!data)  throw new Error('AIRegressionEngine: no data from edge function');
+    // Path 1: user-configured connector via AIOrchestrationService
+    if (aiOrchestrationService.hasUsableConnectors()) {
+      try {
+        const response = await aiOrchestrationService.execute({
+          requestId:    `regr_${context.fromVersion}_${context.toVersion}_${Date.now()}`,
+          task:         'regression_analysis',
+          systemPrompt: 'You are an expert QA regression analysis AI. Return ONLY valid JSON as instructed. No explanation, no markdown, no code fences.',
+          userPrompt:   prompt,
+        });
+        raw = parseJSONFromText(response.text) as RawInsight;
+        orchestratorSucceeded = true;
+      } catch {
+        // Orchestrator failed — fall through to edge function
+      }
+    }
 
-    const raw = data.insight ?? {};
+    // Path 2: Supabase Edge Function fallback
+    if (!orchestratorSucceeded) {
+      const { data, error } = await supabase.functions.invoke<{
+        insight:        RawInsight;
+        model:          string;
+        generationTime: number;
+      }>(FUNCTION_NAME, { body: { prompt, fromVersion: context.fromVersion, toVersion: context.toVersion } });
+
+      if (error) throw new Error(`AIRegressionEngine: ${error.message}`);
+      if (!data)  throw new Error('AIRegressionEngine: no data from edge function');
+
+      raw = data.insight ?? {};
+    }
     return {
       likelyRegressionAreas:   Array.isArray(raw.likelyRegressionAreas)  ? raw.likelyRegressionAreas.map(String)  : [],
       untestedScenarios:       Array.isArray(raw.untestedScenarios)       ? raw.untestedScenarios.map(String)       : [],

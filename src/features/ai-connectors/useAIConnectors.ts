@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { aiConnectorService, type ConnectorTestResult } from './aiConnectorService';
+import { aiOrchestrationService } from './aiOrchestrationService';
 import type { PersistedConnector } from './aiConnectorStore';
 import type { ConnectorDiagnosticReport } from '@/ai';
 
@@ -32,11 +33,13 @@ export function useAIConnectors(): UseAIConnectorsReturn {
 
   const setEnabled = useCallback((id: string, enabled: boolean) => {
     aiConnectorService.setEnabled(id, enabled);
+    aiOrchestrationService.invalidate();
     reload();
   }, [reload]);
 
   const setPriority = useCallback((id: string, priority: number) => {
     aiConnectorService.setPriority(id, priority);
+    aiOrchestrationService.invalidate();
     reload();
   }, [reload]);
 
@@ -47,6 +50,7 @@ export function useAIConnectors(): UseAIConnectorsReturn {
 
   const remove = useCallback((id: string) => {
     aiConnectorService.remove(id);
+    aiOrchestrationService.invalidate();
     reload();
   }, [reload]);
 
