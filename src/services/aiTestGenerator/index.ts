@@ -12,4 +12,10 @@ export type {
   TestCategory, TestSuggestion, DraftTestCase, DraftStep,
   GenerationOptions, GenerationResult, GenerationMeta,
   DuplicateCheckResult,
+  GenerationMode, ContextGenerationOptions, GenerationScope,
+}                                                         from './types.js';
+export {
+  GENERATION_MODE_CATEGORIES,
+  GENERATION_MODE_LABELS,
+  GENERATION_MODE_DESCRIPTIONS,
 }                                                         from './types.js';

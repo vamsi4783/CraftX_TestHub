@@ -1,4 +1,4 @@
-// ─── Test Case Generator (Phase 4 M6) ─────────────────────────────────────────
+// ─── Test Case Generator (Phase 4 M6, extended M11) ───────────────────────────
 // Builds the structured prompt for Claude and parses the JSON response
 // into TestSuggestion[]. The actual API call is handled by AITestGenerationEngine.
 // Pure functions — no network calls here.
@@ -11,6 +11,7 @@ import type {
   DraftStep,
   DraftTestCase,
 } from './types.js';
+import type { ProjectContext, ProjectKnowledge } from '../projectIngestion/types.js';
 
 // ─── Category descriptions ────────────────────────────────────────────────────
 
@@ -116,6 +117,96 @@ ${apisSection}
 
 NAVIGATION FLOWS:
 ${flowsSection}
+
+CATEGORIES TO GENERATE:
+${categoryList}
+
+RESPONSE SCHEMA (return exactly this structure):
+${RESPONSE_SCHEMA}
+
+Generate test cases now:`;
+  }
+
+  /**
+   * Build the AI prompt from M10 ProjectContext + ProjectKnowledge.
+   * Used by M11 generateFromContext() — replaces manual file paste.
+   * Includes existing test titles so the AI can identify coverage gaps.
+   */
+  buildPromptFromContext(
+    ctx:                ProjectContext,
+    knowledge:          ProjectKnowledge,
+    options:            GenerationOptions,
+    existingTestTitles: string[],
+  ): string {
+    const categoryList = options.categories
+      .map(c => `  - ${c}: ${CATEGORY_DESCRIPTIONS[c]}`)
+      .join('\n');
+
+    const modulesSection = ctx.relevantModules.length > 0
+      ? ctx.relevantModules.map(m => {
+          const covered = knowledge.coveredModules.includes(m.id);
+          const coverTag = covered ? '✓ has tests' : '⚠ no tests';
+          return `  - ${m.name} (${m.type}): ${m.description} [${m.fileCount} files, ${coverTag}]`;
+        }).join('\n')
+      : '  (no modules detected)';
+
+    const filesSection = ctx.relevantFiles.length > 0
+      ? ctx.relevantFiles.slice(0, 30).map(f => {
+          const syms = f.symbols.slice(0, 4).join(', ');
+          return `  - ${f.path}: ${f.purpose}${syms ? ` [${syms}]` : ''}`;
+        }).join('\n')
+      : '  (no files in context)';
+
+    const existingSection = existingTestTitles.length > 0
+      ? existingTestTitles.slice(0, 30).map(t => `  - ${t}`).join('\n')
+      : '  (none — generate foundational coverage)';
+
+    const uncoveredSection = knowledge.uncoveredModules.length > 0
+      ? knowledge.uncoveredModules.slice(0, 10).map(id => {
+          const mod = knowledge.codeModules.find(m => m.id === id);
+          return `  - ${mod?.name ?? id}`;
+        }).join('\n')
+      : '  (all modules have some test coverage)';
+
+    const depsSection = ctx.dependencies.slice(0, 10).map(d => `  - ${d.name}@${d.version}`).join('\n')
+      || '  (no dependencies listed)';
+
+    const max = options.maxSuggestions ?? 20;
+    const coveragePct = Math.round(knowledge.coverageScore * 100);
+
+    return `You are an expert QA engineer generating structured test cases based on project intelligence.
+
+IMPORTANT RULES:
+- Generate ONLY the test categories listed below.
+- Each test must be actionable and grounded in the project structure provided.
+- Do NOT invent screens, endpoints, or features not present in the project.
+- Prioritize UNCOVERED modules — prefer generating tests for modules with no existing coverage.
+- Avoid generating tests that duplicate existing test titles listed below.
+- Return ONLY valid JSON matching the schema. No markdown. No explanation outside JSON.
+- Generate at most ${max} suggestions total.
+- Confidence: 0.9+ for clearly-supported tests, 0.6–0.9 for inferred, below 0.6 for speculative.
+
+PROJECT OVERVIEW:
+  Name:         ${ctx.projectName}
+  Summary:      ${ctx.projectSummary}
+  Tech Stack:   ${ctx.techStack}
+  Architecture: ${ctx.architecture ?? 'Unknown'}
+  Coverage:     ${coveragePct}% of modules have tests
+
+MODULES IN SCOPE:
+${modulesSection}
+
+UNCOVERED MODULES (prioritize these):
+${uncoveredSection}
+
+KEY FILES IN SCOPE:
+${filesSection}
+
+MAIN DEPENDENCIES:
+${depsSection}
+
+EXISTING TESTS (do NOT duplicate these — identify gaps instead):
+${existingSection}
 
 CATEGORIES TO GENERATE:
 ${categoryList}

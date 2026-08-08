@@ -20,9 +20,13 @@ import type {
   GenerationRequest,
   GenerationResult,
   TestSuggestion,
-  TestCategory,
+  ContextGenerationOptions,
 } from './types.js';
+import { GENERATION_MODE_CATEGORIES as MODE_CATEGORIES } from './types.js';
 import type { SourceFile } from './ProjectAnalyzer.js';
+import type { ProjectKnowledge, ProjectContextQuery } from '../projectIngestion/types.js';
+import { projectContextBuilder } from '../projectIngestion/ProjectContextBuilder.js';
+import { testCaseService } from '../testCaseService.js';
 
 // ─── Public re-exports ────────────────────────────────────────────────────────
 
@@ -139,6 +143,133 @@ export class AITestGenerationEngine {
         generationTime_ms: Date.now() - t0,
         model:             aiModel,
       },
+    };
+  }
+
+  /**
+   * M11: Generate tests from M10 ProjectKnowledge instead of raw source files.
+   *
+   * Pipeline:
+   *  1. Load existing test cases from DB (for duplicate detection + coverage gaps).
+   *  2. Build ProjectContext via ProjectContextBuilder (respects token budget).
+   *  3. Build AI prompt via TestCaseGenerator.buildPromptFromContext().
+   *  4. Call AI (same M8 connector + edge-function-fallback pattern).
+   *  5. Parse + post-process with SuggestionEngine (passing existing titles).
+   *
+   * SAFETY: never writes to the database. Returns suggestions only.
+   * Human approval via importAccepted() is required before persistence.
+   */
+  async generateFromContext(
+    knowledge:   ProjectKnowledge,
+    ctxOptions:  ContextGenerationOptions,
+    projectId:   string,
+  ): Promise<GenerationResult> {
+    const t0 = Date.now();
+
+    // ── 1. Load existing test cases (Phase E) ────────────────────────────────
+    let existingTestTitles: string[] = [];
+    try {
+      const existing = await testCaseService.list(projectId);
+      existingTestTitles = existing.map(tc => tc.title);
+    } catch {
+      // Non-fatal — proceed without duplicate awareness
+    }
+
+    // ── 2. Build ProjectContext (respects token budget, excludes sensitive) ──
+    const query: ProjectContextQuery = {
+      projectId: knowledge.projectId,
+      moduleIds: ctxOptions.moduleIds,
+      feature:   ctxOptions.feature,
+      filePaths: ctxOptions.filePaths,
+      maxTokens: 24_000, // conservative budget — leave room for system prompt
+      includeTests: true,
+    };
+    const ctx = projectContextBuilder.build(knowledge, query);
+
+    // ── 3. Build prompt ──────────────────────────────────────────────────────
+    const categories = MODE_CATEGORIES[ctxOptions.mode];
+    const options: GenerationOptions = {
+      categories,
+      maxSuggestions: ctxOptions.maxSuggestions ?? 20,
+    };
+
+    const sessionId = crypto.randomUUID();
+    const prompt    = this.generator.buildPromptFromContext(ctx, knowledge, options, existingTestTitles);
+
+    // ── 4. Call AI (identical M8 cost-safety pattern as generate()) ─────────
+    let rawSuggestions: TestSuggestion[] = [];
+    let aiModel = 'unknown';
+
+    if (aiOrchestrationService.hasUsableConnectors()) {
+      try {
+        const response = await aiOrchestrationService.execute({
+          requestId:    sessionId,
+          task:         'test_generation',
+          systemPrompt: 'You are an expert QA engineer. Return ONLY valid JSON as instructed. No explanation, no markdown, no code fences.',
+          userPrompt:   prompt,
+        });
+        const parsed  = parseJSONFromText(response.text) as { suggestions?: unknown[] };
+        const rawJson = JSON.stringify({ suggestions: parsed.suggestions ?? [] });
+        rawSuggestions = this.generator.parseResponse(rawJson, sessionId);
+        aiModel        = response.model;
+      } catch {
+        // fall through to edge function
+      }
+    }
+
+    if (rawSuggestions.length === 0 && aiModel === 'unknown' && aiRuntimePolicy.isEdgeFunctionEnabled()) {
+      try {
+        const req: GenerationRequest = {
+          projectModel:       this._buildProjectModelFromContext(ctx),
+          options,
+          existingTestTitles,
+        };
+        const { data, error } = await supabase.functions.invoke<EdgeFnResponse>(
+          'ai-test-generator',
+          { body: { ...req, prompt, sessionId } },
+        );
+        if (error) throw new Error(error.message);
+        if (data?.suggestions) {
+          const rawJson = JSON.stringify({ suggestions: data.suggestions });
+          rawSuggestions = this.generator.parseResponse(rawJson, sessionId);
+          aiModel        = data.model ?? 'claude';
+        }
+      } catch {
+        rawSuggestions = [];
+        aiModel        = 'unavailable';
+      }
+    }
+
+    if (aiModel === 'unknown') aiModel = 'unavailable';
+
+    // ── 5. Post-process ──────────────────────────────────────────────────────
+    const processed = this.suggestionEngine.process(rawSuggestions, existingTestTitles);
+
+    return {
+      suggestions: processed,
+      meta: {
+        screensAnalyzed:   ctx.relevantFiles.filter(f => f.tags.includes('screen')).length,
+        flowsAnalyzed:     ctx.relevantModules.length,
+        formsAnalyzed:     ctx.relevantFiles.filter(f => f.tags.includes('form') || f.purpose.toLowerCase().includes('form')).length,
+        apisAnalyzed:      ctx.relevantFiles.filter(f => f.tags.includes('service') || f.tags.includes('network')).length,
+        generationTime_ms: Date.now() - t0,
+        model:             aiModel,
+      },
+    };
+  }
+
+  /** Build a minimal ProjectModel from ProjectContext for edge-function compat. */
+  private _buildProjectModelFromContext(ctx: import('../projectIngestion/types.js').ProjectContext): ProjectModel {
+    return {
+      projectType:        'generic',
+      projectName:        ctx.projectName,
+      screens:            [],
+      apis:               [],
+      flows:              [],
+      forms:              [],
+      sourceFiles:        ctx.relevantFiles.map(f => f.path),
+      analysisConfidence: 0.9,
+      analysisNotes:      ['Generated from M10 project intelligence'],
     };
   }
 

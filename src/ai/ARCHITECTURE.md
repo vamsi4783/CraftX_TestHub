@@ -585,3 +585,126 @@ SOURCE_CONNECTED → SCANNING → FILTERING → ANALYZING → INDEXING → UNDER
 | `ProjectContextBuilder.test.ts` | 6 |
 
 **Total test count: 934** (was 869)
+
+---
+
+## M11 — AI Test Generator × Project Intelligence Integration
+
+**Committed:** M11 (Phase 5.5)
+**Test count:** 977 (43 new M11 tests)
+
+### Design principle
+
+M11 is an *extension* of the existing AI Test Generator (M6), not a separate product. Both the manual source-file path and the new Project Intelligence path converge at the same canonical `TestCase` / `TestCaseStep` model and the same `importAccepted()` persistence function. The test execution flow is unchanged.
+
+```
+Manual Source Files          Project Intelligence (M10)
+       │                              │
+ProjectAnalyzer              ProjectContextBuilder
+       │                              │
+  ProjectModel                  ProjectContext
+       │                              │
+  TestCaseGenerator.buildPrompt()  TestCaseGenerator.buildPromptFromContext()
+                    └──────┬──────────┘
+              aiOrchestrationService.execute()
+                           │
+              TestCaseGenerator.parseResponse()
+                           │
+             SuggestionEngine.process(existing titles)
+                           │
+              TestSuggestion[] (all status = 'pending')
+                           │
+           Human Review → Accept / Reject
+                           │
+         AITestGenerationEngine.importAccepted()
+                           │
+              test_cases + test_case_steps (Supabase)
+                           │
+                TestExecutionPage (unchanged)
+```
+
+### New service layer (Phase B)
+
+**`TestCaseGenerator.buildPromptFromContext(ctx, knowledge, options, existingTestTitles)`**
+- Takes `ProjectContext` + `ProjectKnowledge` (from M10) instead of `ProjectModel`
+- Includes module coverage status (✓ has tests / ⚠ no tests)
+- Lists uncovered modules and instructs AI to prioritize them
+- Injects existing test titles to prevent duplicates
+- Respects token budget already enforced by `ProjectContextBuilder`
+
+**`AITestGenerationEngine.generateFromContext(knowledge, ctxOptions, projectId)`**
+1. Queries `testCaseService.list(projectId)` for existing test case titles (Phase E)
+2. Builds `ProjectContext` via `projectContextBuilder.build()` with 24k token budget
+3. Derives `GenerationOptions.categories` from `ContextGenerationOptions.mode` via `GENERATION_MODE_CATEGORIES`
+4. Runs same M8 connector-first / edge-fallback-last cost-safety pattern as `generate()`
+5. Passes existing titles to `SuggestionEngine.process()` for deduplication
+
+### New types (Phase C)
+
+| Type | Purpose |
+|------|---------|
+| `GenerationMode` | `'full_suite' \| 'functional' \| 'ui' \| 'regression' \| 'negative_edge' \| 'security' \| 'module_specific'` |
+| `GENERATION_MODE_CATEGORIES` | Maps each `GenerationMode` → `TestCategory[]` preset |
+| `GENERATION_MODE_LABELS` | Display labels |
+| `GENERATION_MODE_DESCRIPTIONS` | One-sentence descriptions |
+| `GenerationScope` | `'full' \| 'module' \| 'feature' \| 'file'` |
+| `ContextGenerationOptions` | Full options for context-based generation (mode + scope + moduleIds + feature + maxSuggestions) |
+
+### New UI components (Phase F)
+
+**`ProjectIntelligenceInputPanel`**
+- Reads from `projectIngestionStore` (sources keyed by projectId, knowledge keyed by projectId)
+- Filters for `status === 'ready'` sources
+- Scope selector: Full project / Specific module(s) / Feature area
+- Module chip picker (when scope = module)
+- Feature text input (when scope = feature)
+- Generation mode chip picker with tooltip descriptions
+- Live AI connector status badge (connector name, model, fallback state)
+- "Continue →" triggers `onConfigure(knowledge, options, projectId)`
+
+**`ContextPreviewPanel`**
+- Shown in wizard step 1 when in Project Intelligence mode
+- Displays: project overview, context stats (modules / files / token estimate / existing test count), generation config summary, coverage bar, uncovered modules, connector status
+- Flags if no connector is available with actionable error
+
+**`AITestGeneratorPage` (extended)**
+- New `InputMode` toggle: Manual Source Files ↔ Project Intelligence
+- Both modes use the same 4-step stepper
+- PI mode: `handlePIConfigure()` → step 1 preview → `handlePIGenerate()` calls `generateFromContext()`
+- Manual mode: unchanged `handleManualAnalyze()` + `handleManualGenerate()`
+- Connector status shown in step 2 for PI mode
+- Both modes feed into the same `SuggestionList` → `BulkImportDialog` → `importAccepted()` path
+
+### Existing test awareness (Phase E)
+
+Before every `generateFromContext()` call, existing test case titles are fetched via `testCaseService.list(projectId)` and passed to `SuggestionEngine.process()`. The AI prompt includes these titles with the instruction "do NOT duplicate — identify gaps instead." Suggestions matching existing titles above Jaccard threshold 0.6 are marked `isDuplicate: true` and sorted to the bottom of the review list.
+
+### M8 cost-safety (unchanged)
+
+`generateFromContext()` uses the identical fallback pattern as `generate()`:
+1. Try user-configured connectors via `aiOrchestrationService.execute()`
+2. Fall through to Supabase edge function **only** if `aiRuntimePolicy.isEdgeFunctionEnabled() === true`
+3. Never calls the TestHub-owned Anthropic key unless explicitly opted in
+
+### Invariant verification
+
+```
+Manual Test Case             AI Generated (M11)
+       │                           │
+Manual Creation          generateFromContext()
+       │                           │  (human review + approval)
+       └──────────┬────────────────┘
+                  ↓
+           canonical TestCase
+           (test_cases table)
+                  ↓
+         TestExecutionPage (unchanged)
+```
+
+Both paths are producers of the same `TestCase` schema. `importAccepted()` is the sole persistence entry point. The test execution flow is completely agnostic to how a test case was created.
+
+### New test coverage
+
+| Test file | Cases | Covers |
+|-----------|-------|--------|
+| `m11-context-integration.test.ts` | 43 | GenerationMode presets, buildPromptFromContext, ProjectContext scope/token-budget, SuggestionEngine existing-awareness, DraftTestCase ↔ TestCase compatibility, malformed response handling, human approval invariant, sensitive file exclusion, token budget enforcement, edge fallback policy, M6 regression |

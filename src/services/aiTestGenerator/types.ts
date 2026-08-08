@@ -142,6 +142,60 @@ export interface GenerationOptions {
   language?:     string;  // "en" default
 }
 
+// ─── M11: Generation modes ─────────────────────────────────────────────────────
+
+export type GenerationMode =
+  | 'full_suite'
+  | 'functional'
+  | 'ui'
+  | 'regression'
+  | 'negative_edge'
+  | 'security'
+  | 'module_specific';
+
+export const GENERATION_MODE_CATEGORIES: Record<GenerationMode, TestCategory[]> = {
+  full_suite:      ['smoke', 'happy_path', 'validation', 'boundary', 'negative', 'navigation', 'regression'],
+  functional:      ['happy_path', 'validation', 'boundary'],
+  ui:              ['smoke', 'navigation', 'validation'],
+  regression:      ['regression', 'smoke'],
+  negative_edge:   ['negative', 'boundary', 'permission'],
+  security:        ['permission', 'negative'],
+  module_specific: ['smoke', 'happy_path', 'validation', 'negative'],
+};
+
+export const GENERATION_MODE_LABELS: Record<GenerationMode, string> = {
+  full_suite:      'Full Suite',
+  functional:      'Functional',
+  ui:              'UI',
+  regression:      'Regression',
+  negative_edge:   'Negative / Edge Case',
+  security:        'Security',
+  module_specific: 'Module Specific',
+};
+
+export const GENERATION_MODE_DESCRIPTIONS: Record<GenerationMode, string> = {
+  full_suite:      'Comprehensive coverage: smoke, happy path, validation, boundary, negative, navigation, and regression tests.',
+  functional:      'Core business logic: happy path flows, form validation, and boundary inputs.',
+  ui:              'Interface coverage: smoke checks, navigation flows, and field-level validation.',
+  regression:      'Critical path protection: regression tests and smoke checks for existing flows.',
+  negative_edge:   'Failure modes: negative inputs, boundary extremes, and permission checks.',
+  security:        'Access control and authorization: permission gating and unauthorized-action scenarios.',
+  module_specific: 'Targeted coverage for a specific module: smoke, happy path, validation, and negative tests.',
+};
+
+/** Scope for context-based generation — drives ProjectContextQuery. */
+export type GenerationScope = 'full' | 'module' | 'feature' | 'file';
+
+/** Options for M11 Project-Intelligence-based generation. */
+export interface ContextGenerationOptions {
+  mode:            GenerationMode;
+  scope:           GenerationScope;
+  moduleIds?:      string[];      // when scope === 'module'
+  feature?:        string;        // when scope === 'feature'
+  filePaths?:      string[];      // when scope === 'file'
+  maxSuggestions?: number;        // defaults to 20
+}
+
 export interface GenerationRequest {
   projectModel:       ProjectModel;
   options:            GenerationOptions;
