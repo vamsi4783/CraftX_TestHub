@@ -187,27 +187,53 @@ function _isMCPUsable(c: PersistedConnector): boolean {
   return (t === 'sse' || t === 'websocket') && !!c.mcpEndpoint;
 }
 
-/** Sorted list of enabled connectors usable for text generation. */
+/**
+ * Sorted list of enabled connectors usable for text generation.
+ *
+ * Gemini connectors always require an API key; if the session has expired
+ * (SecureCredentialStore cleared on tab close) the connector cannot build,
+ * so exclude it here so hasUsableConnectors() gives an accurate answer and
+ * callers don't accidentally route to the edge-function fallback.
+ */
 function usableConnectors(): PersistedConnector[] {
   return aiConnectorStore
     .list()
-    .filter(c => c.enabled && (c.kind !== 'mcp' || _isMCPUsable(c)))
+    .filter(c => {
+      if (!c.enabled) return false;
+      if (c.kind === 'mcp') return _isMCPUsable(c);
+      // Gemini always requires an API key — exclude it when the session key is missing.
+      if (c.kind === 'gemini') return secureCredentialStore.hasSecret(c.id);
+      return true; // ollama (no key needed) and openai_compatible (key optional)
+    })
     .sort((a, b) => a.priority - b.priority);
 }
+
+type Disconnectable = { disconnect?: () => Promise<void> };
 
 class AIOrchestrationServiceImpl {
   private _orchestrator: AIOrchestrator | null = null;
   private _dirty = true;
   private _building: Promise<AIOrchestrator> | null = null;
+  /** Live MCP connectors in the current orchestrator — disconnected on rebuild. */
+  private _mcpConnectors: Disconnectable[] = [];
 
   /**
    * Mark the cached orchestrator dirty so the next execute() rebuilds it.
    * Call this after any connector add / remove / enable / priority change.
+   * Disconnects any open MCP connections from the previous orchestrator.
    */
   invalidate(): void {
+    this._disconnectMCP();
     this._orchestrator = null;
     this._building     = null;
     this._dirty        = true;
+  }
+
+  private _disconnectMCP(): void {
+    for (const c of this._mcpConnectors) {
+      c.disconnect?.().catch(() => { /* best-effort */ });
+    }
+    this._mcpConnectors = [];
   }
 
   /** True if there is at least one enabled, non-MCP connector configured. */
@@ -216,6 +242,9 @@ class AIOrchestrationServiceImpl {
   }
 
   private async _buildOrchestrator(): Promise<AIOrchestrator> {
+    // Disconnect any MCP connections from a previous orchestrator before rebuilding.
+    this._disconnectMCP();
+
     const registry = new AIConnectorRegistry();
 
     for (const c of usableConnectors()) {
@@ -225,6 +254,7 @@ class AIOrchestrationServiceImpl {
         // Eagerly connect MCP transports before registering.
         if (c.kind === 'mcp') {
           await (connector as unknown as { connect?: () => Promise<void> }).connect?.();
+          this._mcpConnectors.push(connector as unknown as Disconnectable);
         }
         registry.register(connector, { priority: c.priority, enabled: true });
       } catch (err) {

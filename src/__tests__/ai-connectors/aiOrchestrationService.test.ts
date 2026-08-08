@@ -149,6 +149,7 @@ describe('hasUsableConnectors', () => {
 
   it('returns true with an enabled gemini connector', () => {
     vi.mocked(aiConnectorStore.list).mockReturnValue([makePersistedConnector('gemini')] as never);
+    vi.mocked(secureCredentialStore.hasSecret).mockReturnValue(true);
     expect(makeSvc().hasUsableConnectors()).toBe(true);
   });
 
@@ -179,6 +180,9 @@ describe('execute — connector selection', () => {
   beforeEach(() => {
     vi.mocked(aiConnectorStore.list).mockReturnValue([]);
     vi.mocked(AIConnectorFactory.fromConfig).mockReset();
+    // Gemini connectors require a session key — default true so Gemini tests work;
+    // tests that verify Ollama-only paths are unaffected by this setting.
+    vi.mocked(secureCredentialStore.hasSecret).mockReturnValue(true);
   });
 
   it('throws NO_CONNECTORS when no usable connectors exist', async () => {
@@ -291,6 +295,7 @@ describe('API key security', () => {
   beforeEach(() => {
     vi.mocked(aiConnectorStore.list).mockReturnValue([makePersistedConnector('gemini')] as never);
     vi.mocked(AIConnectorFactory.fromConfig).mockReturnValue(mockConnector('gemini') as never);
+    vi.mocked(secureCredentialStore.hasSecret).mockReturnValue(true);
   });
 
   it('SecureCredentialStore.retrieve is called to get the API key', async () => {

@@ -31,7 +31,8 @@ vi.mock('@/features/ai-connectors/aiConnectorStore', () => ({
 vi.mock('@/features/ai-connectors/secureCredentialStore', () => ({
   secureCredentialStore: {
     retrieve:  vi.fn(() => undefined),
-    hasSecret: vi.fn(() => false),
+    // Default true — m7 tests configure working Gemini connectors that have a session key.
+    hasSecret: vi.fn(() => true),
   },
 }));
 
