@@ -71,6 +71,41 @@ export type { IAITelemetry }                from './telemetry/AITelemetry';
 export { NoOpCache, InMemoryAICache, buildCacheKey } from './cache/AICache';
 export type { IAICache }                             from './cache/AICache';
 
+// Security
+export { SecureString }             from './security/SecureString';
+
+// Production connectors (M2)
+export { GeminiFlashConnector }     from './providers/GeminiFlashConnector';
+export type { GeminiFlashConfig }   from './providers/GeminiFlashConnector';
+export { OllamaConnector }          from './providers/OllamaConnector';
+export type { OllamaConfig }        from './providers/OllamaConnector';
+export { OpenAICompatibleConnector } from './providers/OpenAICompatibleConnector';
+export type { OpenAICompatibleConfig } from './providers/OpenAICompatibleConnector';
+export { GenericMCPConnector }      from './agents/GenericMCPConnector';
+export type {
+  MCPTransportAdapter,
+  MCPConnectorConfig,
+}                                   from './agents/GenericMCPConnector';
+
+// Factory
+export { AIConnectorFactory }       from './factory/AIConnectorFactory';
+export type { ConnectorBuilder }    from './factory/AIConnectorFactory';
+
+// Health monitoring
+export { ConnectorHealthMonitor }   from './health/ConnectorHealthMonitor';
+export type { ConnectorStats }      from './health/ConnectorHealthMonitor';
+
+// Diagnostics
+export {
+  getDiagnostics,
+  getAllDiagnostics,
+  formatDiagnosticsSummary,
+}                                   from './diagnostics/ConnectorDiagnostics';
+export type { ConnectorDiagnosticReport } from './diagnostics/ConnectorDiagnostics';
+
+// Stream utilities (shared, exposed for testing)
+export type { Fetcher }             from './providers/shared/streamUtils';
+
 // Base classes (for building real connector implementations)
 export { BaseConnector }       from './connectors/BaseConnector';
 export { BaseProviderAdapter } from './providers/BaseProviderAdapter';
