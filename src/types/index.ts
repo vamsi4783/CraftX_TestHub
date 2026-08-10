@@ -109,6 +109,18 @@ export interface Module {
   open_bug_count?: number;
 }
 
+// M12: lightweight provenance — stored as JSONB, never contains raw source
+export interface AiGenerationMetadata {
+  source_type: 'project_intelligence' | 'manual_analysis' | 'json_import';
+  project_id?: string;
+  module_id_from_knowledge?: string;
+  generation_mode?: string;
+  generation_scope?: string;
+  generated_at: string;
+  intelligence_schema_version?: number;
+  connector_model?: string;
+}
+
 export interface TestCase {
   id: string;
   project_id: string;
@@ -126,6 +138,8 @@ export interface TestCase {
   updated_by: string | null;
   created_at: string;
   updated_at: string;
+  // M12: optional AI provenance — null for manually-created cases
+  ai_generation_metadata?: AiGenerationMetadata | null;
   // joined
   module?: Module;
   steps?: TestCaseStep[];

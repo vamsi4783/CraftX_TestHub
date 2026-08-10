@@ -15,25 +15,35 @@ import { useState }     from 'react';
 import type { TestSuggestion, TestCategory } from '@/services/aiTestGenerator';
 
 const CATEGORY_COLORS: Record<TestCategory, 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'success' | 'info'> = {
-  smoke:       'success',
-  happy_path:  'primary',
-  validation:  'info',
-  boundary:    'warning',
-  negative:    'error',
-  permission:  'secondary',
-  navigation:  'primary',
-  regression:  'warning',
+  smoke:          'success',
+  happy_path:     'primary',
+  validation:     'info',
+  boundary:       'warning',
+  negative:       'error',
+  permission:     'secondary',
+  navigation:     'primary',
+  regression:     'warning',
+  integration:    'info',
+  performance:    'warning',
+  api:            'secondary',
+  data_validation:'info',
+  compatibility:  'default',
 };
 
 const CATEGORY_LABELS: Record<TestCategory, string> = {
-  smoke:       'Smoke',
-  happy_path:  'Happy Path',
-  validation:  'Validation',
-  boundary:    'Boundary',
-  negative:    'Negative',
-  permission:  'Permission',
-  navigation:  'Navigation',
-  regression:  'Regression',
+  smoke:          'Smoke',
+  happy_path:     'Happy Path',
+  validation:     'Validation',
+  boundary:       'Boundary',
+  negative:       'Negative',
+  permission:     'Permission',
+  navigation:     'Navigation',
+  regression:     'Regression',
+  integration:    'Integration',
+  performance:    'Performance',
+  api:            'API',
+  data_validation:'Data Validation',
+  compatibility:  'Compatibility',
 };
 
 const PRIORITY_COLORS: Record<string, 'error' | 'warning' | 'info' | 'default'> = {

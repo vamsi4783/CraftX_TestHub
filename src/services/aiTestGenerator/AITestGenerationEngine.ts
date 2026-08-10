@@ -21,6 +21,7 @@ import type {
   GenerationResult,
   TestSuggestion,
   ContextGenerationOptions,
+  GenerationProvenance,
 } from './types.js';
 import { GENERATION_MODE_CATEGORIES as MODE_CATEGORIES } from './types.js';
 import type { SourceFile } from './ProjectAnalyzer.js';
@@ -245,6 +246,16 @@ export class AITestGenerationEngine {
     // ── 5. Post-process ──────────────────────────────────────────────────────
     const processed = this.suggestionEngine.process(rawSuggestions, existingTestTitles);
 
+    const provenance: GenerationProvenance = {
+      source_type:               'project_intelligence',
+      project_id:                projectId,
+      generation_mode:           ctxOptions.mode,
+      generation_scope:          ctxOptions.scope,
+      module_ids_from_knowledge: ctxOptions.moduleIds,
+      generated_at:              new Date().toISOString(),
+      connector_model:           aiModel !== 'unavailable' ? aiModel : undefined,
+    };
+
     return {
       suggestions: processed,
       meta: {
@@ -255,6 +266,7 @@ export class AITestGenerationEngine {
         generationTime_ms: Date.now() - t0,
         model:             aiModel,
       },
+      provenance,
     };
   }
 
@@ -292,10 +304,11 @@ export class AITestGenerationEngine {
    * Returns the count of saved test cases.
    */
   async importAccepted(
-    suggestions: TestSuggestion[],
-    projectId:   string,
-    moduleId:    string | null,
-    createdBy:   string,
+    suggestions:  TestSuggestion[],
+    projectId:    string,
+    moduleId:     string | null,
+    createdBy:    string,
+    provenance?:  import('@/types').AiGenerationMetadata,
   ): Promise<{ saved: number; errors: string[] }> {
     const accepted = suggestions.filter(s => s.status === 'accepted');
     if (accepted.length === 0) return { saved: 0, errors: [] };
@@ -303,23 +316,31 @@ export class AITestGenerationEngine {
     let saved  = 0;
     const errors: string[] = [];
 
+    // Normalise tags to include category from suggestion for traceability
+    for (const suggestion of accepted) {
+      const tagSet = new Set(suggestion.draft.tags);
+      if (!tagSet.has(suggestion.category)) tagSet.add(`ai:${suggestion.category}`);
+      suggestion.draft.tags = Array.from(tagSet);
+    }
+
     for (const suggestion of accepted) {
       try {
         // Insert test case
         const { data: tc, error: tcErr } = await supabase
           .from('test_cases')
           .insert({
-            project_id:          projectId,
-            module_id:           moduleId,
-            title:               suggestion.draft.title,
-            description:         suggestion.draft.description,
-            priority:            suggestion.draft.priority,
-            preconditions:       suggestion.draft.preconditions,
-            tags:                suggestion.draft.tags,
-            is_automation_ready: suggestion.draft.is_automation_ready,
-            estimated_minutes:   suggestion.draft.estimated_minutes,
-            status:              'draft',
-            created_by:          createdBy,
+            project_id:             projectId,
+            module_id:              moduleId,
+            title:                  suggestion.draft.title,
+            description:            suggestion.draft.description,
+            priority:               suggestion.draft.priority,
+            preconditions:          suggestion.draft.preconditions,
+            tags:                   suggestion.draft.tags,
+            is_automation_ready:    suggestion.draft.is_automation_ready,
+            estimated_minutes:      suggestion.draft.estimated_minutes,
+            status:                 'draft',
+            created_by:             createdBy,
+            ai_generation_metadata: provenance ?? null,
           })
           .select('id')
           .single();
@@ -335,7 +356,7 @@ export class AITestGenerationEngine {
             description:       step.description,
             expected_result:   step.expected_result,
             notes:             step.notes,
-            automation_config: step.automation_config ?? undefined,
+            automation_config: step.automation_config ?? null,
           }));
 
           const { error: stepsErr } = await supabase

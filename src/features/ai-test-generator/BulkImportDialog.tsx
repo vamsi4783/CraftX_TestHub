@@ -8,20 +8,23 @@ import {
 } from '@mui/material';
 import { useState, useEffect } from 'react';
 import { supabase }            from '@/lib/supabase';
-import type { TestSuggestion } from '@/services/aiTestGenerator';
+import type { TestSuggestion, GenerationProvenance } from '@/services/aiTestGenerator';
 import { aiTestGenerationEngine } from '@/services/aiTestGenerator';
+import type { AiGenerationMetadata } from '@/types';
 
 interface Project { id: string; name: string; }
 interface Module  { id: string; name: string; project_id: string; }
 
 interface Props {
-  open:        boolean;
-  suggestions: TestSuggestion[];
-  onClose:     () => void;
-  onImported:  (count: number) => void;
+  open:                   boolean;
+  suggestions:            TestSuggestion[];
+  onClose:                () => void;
+  onImported:             (count: number) => void;
+  provenance?:            GenerationProvenance;
+  preselectedProjectId?:  string;
 }
 
-export function BulkImportDialog({ open, suggestions, onClose, onImported }: Props) {
+export function BulkImportDialog({ open, suggestions, onClose, onImported, provenance, preselectedProjectId }: Props) {
   const [projects,   setProjects]   = useState<Project[]>([]);
   const [modules,    setModules]    = useState<Module[]>([]);
   const [projectId,  setProjectId]  = useState('');
@@ -46,10 +49,16 @@ export function BulkImportDialog({ open, suggestions, onClose, onImported }: Pro
       .order('name')
       .then(({ data, error: e }: { data: Project[] | null; error: { message: string } | null }) => {
         if (e) { setError(e.message); }
-        else   { setProjects(data ?? []); }
+        else {
+          setProjects(data ?? []);
+          // Pre-select project when coming from PI mode
+          if (preselectedProjectId && data?.some(p => p.id === preselectedProjectId)) {
+            setProjectId(preselectedProjectId);
+          }
+        }
         setLoading(false);
       });
-  }, [open]);
+  }, [open, preselectedProjectId]);
 
   // ── Load modules when project changes ─────────────────────────────────────
   useEffect(() => {
@@ -71,8 +80,16 @@ export function BulkImportDialog({ open, suggestions, onClose, onImported }: Pro
     setError(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      const metadata: AiGenerationMetadata | undefined = provenance ? {
+        source_type:               provenance.source_type,
+        project_id:                provenance.project_id,
+        generation_mode:           provenance.generation_mode,
+        generation_scope:          provenance.generation_scope,
+        generated_at:              provenance.generated_at,
+        connector_model:           provenance.connector_model,
+      } : undefined;
       const result = await aiTestGenerationEngine.importAccepted(
-        accepted, projectId, moduleId, user?.id ?? 'unknown',
+        accepted, projectId, moduleId, user?.id ?? 'unknown', metadata,
       );
       if (result.errors.length > 0) {
         setError(`${result.errors.length} error(s): ${result.errors[0]}`);

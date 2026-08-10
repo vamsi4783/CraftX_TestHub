@@ -32,38 +32,59 @@ import { ProjectInputPanel }             from './ProjectInputPanel';
 import { ProjectModelPreview }           from './ProjectModelPreview';
 import { ProjectIntelligenceInputPanel } from './ProjectIntelligenceInputPanel';
 import { ContextPreviewPanel }           from './ContextPreviewPanel';
+import { ProjectUnderstandingSummary }   from './ProjectUnderstandingSummary';
+import { TestPlanReviewPanel }           from './TestPlanReviewPanel';
 import { SuggestionList }                from './SuggestionList';
 import { BulkImportDialog }              from './BulkImportDialog';
+import { buildHeuristicTestPlan }        from '@/services/aiTestGenerator';
+import type { AiTestPlan, GenerationProvenance } from '@/services/aiTestGenerator';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type InputMode = 'manual' | 'intelligence';
-type WizardStep = 'input' | 'preview' | 'generate' | 'review';
+// PI wizard: input → understanding → plan → generate → review
+// Manual wizard: input → preview → generate → review
+type WizardStep = 'input' | 'preview' | 'understanding' | 'plan' | 'generate' | 'review';
 
 const ALL_CATEGORIES: TestCategory[] = [
   'smoke', 'happy_path', 'validation', 'boundary',
   'negative', 'permission', 'navigation', 'regression',
+  'integration', 'performance', 'api', 'data_validation', 'compatibility',
 ];
 
 const CATEGORY_LABELS: Record<TestCategory, string> = {
-  smoke:       'Smoke',
-  happy_path:  'Happy Path',
-  validation:  'Validation',
-  boundary:    'Boundary',
-  negative:    'Negative',
-  permission:  'Permission',
-  navigation:  'Navigation',
-  regression:  'Regression',
+  smoke:          'Smoke',
+  happy_path:     'Happy Path',
+  validation:     'Validation',
+  boundary:       'Boundary',
+  negative:       'Negative',
+  permission:     'Permission',
+  navigation:     'Navigation',
+  regression:     'Regression',
+  integration:    'Integration',
+  performance:    'Performance',
+  api:            'API',
+  data_validation:'Data Validation',
+  compatibility:  'Compatibility',
 };
 
-const STEPS: { key: WizardStep; label: string }[] = [
+const MANUAL_STEPS: { key: WizardStep; label: string }[] = [
   { key: 'input',    label: 'Analyze Project' },
   { key: 'preview',  label: 'Preview Analysis' },
   { key: 'generate', label: 'Configure & Generate' },
   { key: 'review',   label: 'Review & Import' },
 ];
 
-const STEP_INDEX: Record<WizardStep, number> = { input: 0, preview: 1, generate: 2, review: 3 };
+const PI_STEPS: { key: WizardStep; label: string }[] = [
+  { key: 'input',         label: 'Select Project' },
+  { key: 'understanding', label: 'Project Understanding' },
+  { key: 'plan',          label: 'Test Plan' },
+  { key: 'generate',      label: 'Configure & Generate' },
+  { key: 'review',        label: 'Review & Import' },
+];
+
+const MANUAL_STEP_INDEX: Record<WizardStep, number> = { input: 0, preview: 1, understanding: -1, plan: -1, generate: 2, review: 3 };
+const PI_STEP_INDEX:     Record<WizardStep, number> = { input: 0, preview: -1, understanding: 1, plan: 2, generate: 3, review: 4 };
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -85,8 +106,12 @@ export function AITestGeneratorPage() {
   const [piKnowledge,   setPiKnowledge]   = useState<ProjectKnowledge | null>(null);
   const [piOptions,     setPiOptions]     = useState<ContextGenerationOptions | null>(null);
   const [piProjectId,   setPiProjectId]   = useState<string>('');
+  const [piTestPlan,    setPiTestPlan]    = useState<AiTestPlan | null>(null);
+  const [piProvenance,  setPiProvenance]  = useState<GenerationProvenance | null>(null);
   // existing test count loaded when PI configure runs
   const [existingCount, setExistingCount] = useState(0);
+  // per-module TestHub test case counts (moduleId → count)
+  const [moduleTestCounts, setModuleTestCounts] = useState<Record<string, number>>({});
 
   // ── Manual generation options ─────────────────────────────────────────────────
   const [selectedCategories, setSelectedCategories] = useState<TestCategory[]>([
@@ -111,6 +136,8 @@ export function AITestGeneratorPage() {
     setProjectModel(null);
     setPiKnowledge(null);
     setPiOptions(null);
+    setPiTestPlan(null);
+    setPiProvenance(null);
     setSuggestions([]);
     setAnalyzeError(null);
     setGenerateError(null);
@@ -167,15 +194,30 @@ export function AITestGeneratorPage() {
     setPiOptions(options);
     setPiProjectId(projectId);
 
-    // Pre-load existing test count for the preview panel
+    // Pre-load existing test count + per-module breakdown
+    let count = 0;
+    const perModule: Record<string, number> = {};
     try {
       const existing = await testCaseService.list(projectId);
-      setExistingCount(existing.length);
-    } catch {
-      setExistingCount(0);
-    }
+      count = existing.length;
+      for (const tc of existing) {
+        if (tc.module_id) {
+          perModule[tc.module_id] = (perModule[tc.module_id] ?? 0) + 1;
+        }
+      }
+    } catch { /* non-fatal */ }
+    setExistingCount(count);
+    setModuleTestCounts(perModule);
 
-    setCurrentStep('preview');
+    // Build heuristic test plan
+    const plan = buildHeuristicTestPlan(
+      knowledge,
+      count,
+      options.scope === 'module' ? options.moduleIds : undefined,
+    );
+    setPiTestPlan(plan);
+
+    setCurrentStep('understanding');
   };
 
   const handlePIGenerate = async () => {
@@ -189,6 +231,7 @@ export function AITestGeneratorPage() {
         piProjectId,
       );
       setSuggestions(result.suggestions);
+      if (result.provenance) setPiProvenance(result.provenance);
       setCurrentStep('review');
     } catch (e) {
       setGenerateError(e instanceof Error ? e.message : String(e));
@@ -227,14 +270,20 @@ export function AITestGeneratorPage() {
         <Chip label="Beta" size="small" color="warning" />
       </Stack>
 
-      {/* Stepper */}
-      <Stepper activeStep={STEP_INDEX[currentStep]} sx={{ mb: 3 }}>
-        {STEPS.map(s => (
-          <Step key={s.key}>
-            <StepLabel>{s.label}</StepLabel>
-          </Step>
-        ))}
-      </Stepper>
+      {/* Stepper — different steps for manual vs PI mode */}
+      {(() => {
+        const steps = inputMode === 'intelligence' ? PI_STEPS : MANUAL_STEPS;
+        const index = inputMode === 'intelligence' ? PI_STEP_INDEX[currentStep] : MANUAL_STEP_INDEX[currentStep];
+        return (
+          <Stepper activeStep={index} sx={{ mb: 3 }}>
+            {steps.map(s => (
+              <Step key={s.key}>
+                <StepLabel>{s.label}</StepLabel>
+              </Step>
+            ))}
+          </Stepper>
+        );
+      })()}
 
       {/* ── Step 0: Input ── */}
       {currentStep === 'input' && (
@@ -285,56 +334,79 @@ export function AITestGeneratorPage() {
         </Paper>
       )}
 
-      {/* ── Step 1: Preview ── */}
-      {currentStep === 'preview' && (
+      {/* ── Step 1 (Manual): Analysis Preview ── */}
+      {currentStep === 'preview' && inputMode === 'manual' && (
         <Paper sx={{ p: 3 }}>
           <Stack direction="row" spacing={2} alignItems="center" mb={2}>
-            <Typography variant="h6">
-              {inputMode === 'manual' ? 'Analysis Preview' : 'Project Context Preview'}
-            </Typography>
+            <Typography variant="h6">Analysis Preview</Typography>
             <Box flex={1} />
             <Button size="small" onClick={() => setCurrentStep('input')}>← Back</Button>
-            {inputMode === 'manual' ? (
-              <Button variant="contained" onClick={() => setCurrentStep('generate')}>
-                Continue to Generate →
-              </Button>
-            ) : (
-              <Button
-                variant="contained"
-                startIcon={<AutoAwesomeIcon />}
-                onClick={() => setCurrentStep('generate')}
-                disabled={!connectorStatus.hasUsableConnectors && !connectorStatus.edgeFunctionEnabled}
-              >
-                Continue to Generate →
-              </Button>
-            )}
+            <Button variant="contained" onClick={() => setCurrentStep('generate')}>
+              Continue to Generate →
+            </Button>
           </Stack>
-
-          {inputMode === 'manual' && projectModel ? (
+          {projectModel && (
             <>
               <Typography variant="body2" color="text.secondary" mb={2}>
                 Review what was detected. Low confidence means less detailed output — add more files.
               </Typography>
               <ProjectModelPreview model={projectModel} />
             </>
-          ) : inputMode === 'intelligence' && piKnowledge && piOptions ? (
-            <ContextPreviewPanel
-              knowledge={piKnowledge}
-              options={piOptions}
-              connectorStatus={connectorStatus}
-              existingCount={existingCount}
-            />
-          ) : null}
+          )}
         </Paper>
       )}
 
-      {/* ── Step 2: Configure & Generate ── */}
+      {/* ── Step 1 (PI): Project Understanding ── */}
+      {currentStep === 'understanding' && inputMode === 'intelligence' && piKnowledge && (
+        <Paper sx={{ p: 3 }}>
+          <Stack direction="row" spacing={2} alignItems="center" mb={2}>
+            <Typography variant="h6">Project Understanding</Typography>
+            <Box flex={1} />
+            <Button size="small" onClick={() => setCurrentStep('input')}>← Back</Button>
+            <Button variant="contained" onClick={() => setCurrentStep('plan')}>
+              Review Test Plan →
+            </Button>
+          </Stack>
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            Review what Project Intelligence detected about your project. This context will guide AI test generation.
+          </Typography>
+          <ProjectUnderstandingSummary knowledge={piKnowledge} existingCount={existingCount} />
+        </Paper>
+      )}
+
+      {/* ── Step 2 (PI): Test Plan ── */}
+      {currentStep === 'plan' && inputMode === 'intelligence' && piKnowledge && piTestPlan && (
+        <Paper sx={{ p: 3 }}>
+          <Stack direction="row" spacing={2} alignItems="center" mb={2}>
+            <Typography variant="h6">Test Plan</Typography>
+            <Box flex={1} />
+            <Button size="small" onClick={() => setCurrentStep('understanding')}>← Back</Button>
+            <Button
+              variant="contained"
+              startIcon={<AutoAwesomeIcon />}
+              onClick={() => setCurrentStep('generate')}
+              disabled={!connectorStatus.hasUsableConnectors && !connectorStatus.edgeFunctionEnabled}
+            >
+              Configure & Generate →
+            </Button>
+          </Stack>
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            Review the AI test plan before generating test cases. This shows what will be tested and why.
+          </Typography>
+          <TestPlanReviewPanel
+            plan={piTestPlan}
+            existingCounts={moduleTestCounts}
+          />
+        </Paper>
+      )}
+
+      {/* ── Step (Manual 2 / PI 3): Configure & Generate ── */}
       {currentStep === 'generate' && (
         <Paper sx={{ p: 3 }}>
           <Stack direction="row" spacing={2} alignItems="center" mb={2}>
             <Typography variant="h6">Configure Generation</Typography>
             <Box flex={1} />
-            <Button size="small" onClick={() => setCurrentStep('preview')}>← Back</Button>
+            <Button size="small" onClick={() => setCurrentStep(inputMode === 'intelligence' ? 'plan' : 'preview')}>← Back</Button>
           </Stack>
 
           {inputMode === 'manual' ? (
@@ -471,6 +543,8 @@ export function AITestGeneratorPage() {
         suggestions={suggestions}
         onClose={() => setImportOpen(false)}
         onImported={handleImported}
+        provenance={piProvenance ?? undefined}
+        preselectedProjectId={inputMode === 'intelligence' ? piProjectId : undefined}
       />
 
       {/* ── Snackbar ── */}

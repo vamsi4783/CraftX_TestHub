@@ -708,3 +708,360 @@ Both paths are producers of the same `TestCase` schema. `importAccepted()` is th
 | Test file | Cases | Covers |
 |-----------|-------|--------|
 | `m11-context-integration.test.ts` | 43 | GenerationMode presets, buildPromptFromContext, ProjectContext scope/token-budget, SuggestionEngine existing-awareness, DraftTestCase ↔ TestCase compatibility, malformed response handling, human approval invariant, sensitive file exclusion, token budget enforcement, edge fallback policy, M6 regression |
+
+---
+
+## M12 — Test Intelligence Productionization
+
+**Committed:** M12 (Phase 6)
+**Test count:** 1036 (59 new M12 tests, in `src/__tests__/m12/`)
+
+### Design principle: ONE canonical TestHub testing workflow
+
+Manual test cases, JSON-imported test cases, and AI-generated test cases all become the same canonical `TestCase` records and use the same execution/reporting infrastructure. There is no separate "AI testing system."
+
+```
+Manual UI          JSON Import          AI Generation (PI)
+    │                   │                      │
+    ▼                   ▼                      ▼
+testCaseService     normalizeTestCase()   importAccepted()
+  .create()       + testCaseService            │
+    │               .create()            (normalizeTestCase
+    └───────────────────┴──────────────── called internally)
+                        ↓
+                  test_cases table  (ai_generation_metadata JSONB)
+                        ↓
+              TestExecutionPage (unchanged)
+```
+
+### Phase B — TestCaseNormalizer (`src/services/testCaseNormalizer.ts`)
+
+Pure function normalizer that is the single validation/coercion path for all test case inputs:
+
+- `normalizeTestCase(raw)` — accepts loose JSON (camelCase, snake_case, human-readable field names); returns `NormalizationResult { ok, draft?, errors[] }`
+- `normalizeTestCaseBatch(raws[])` — normalizes a batch; returns `{ results, validCount, invalidCount }`
+- `normalizeCategory(raw)` — maps 13 canonical categories + aliases; defaults to `'smoke'`
+
+**Category aliases:** `functional→happy_path`, `e2e/end-to-end→integration`, `auth/authorization→permission`, `ui→smoke`, `perf→performance`, `data/database→data_validation`, `edge_case→boundary`
+
+**Priority aliases:** `p1/blocker/urgent→critical`, `p2/major→high`, `p3/normal→medium`, `p4/minor/trivial→low`
+
+**Field name aliases:** `isAutomationReady`, `estimatedMinutes`, `testName/name→title`, `action/instruction→step description`, `expectedResult/expected/assertion→expected_result`
+
+### Phase C — JSON Import (`src/services/jsonImportService.ts`)
+
+New JSON file import feature. Supported input shapes:
+- Direct array: `[{ title, steps, ... }]`
+- Wrapped: `{ test_cases: [...] }` | `{ cases: [...] }` | `{ tests: [...] }`
+- Single object: `{ title, steps, ... }` → wrapped automatically
+
+API:
+- `parseJsonInput(text)` — extracts raw array from any supported shape; returns `null` on failure
+- `dryRunJsonImport(raws)` — validates + previews without persisting
+- `importJsonTestCases(raws, options)` — normalizes → deduplicates (via `SuggestionEngine.checkDuplicate()`) → persists via `testCaseService.create()` path; writes `ai_generation_metadata` with `source_type: 'json_import'`
+
+UI: `JsonImportDialog` (5-phase: pick → preview → target → importing → done) added to `TestCasesPage`.
+
+### Phase D — Extended categories (13 total)
+
+Original 8: `smoke`, `happy_path`, `validation`, `boundary`, `negative`, `permission`, `navigation`, `regression`
+
+New 5: `integration`, `performance`, `api`, `data_validation`, `compatibility`
+
+`GENERATION_MODE_CATEGORIES` updated for all 7 modes. `SuggestionCard`, `AITestGeneratorPage`, `SuggestionList` updated. `TestCaseGenerator` prompt includes descriptions for all 13 categories.
+
+### Phase E — Project Understanding Summary (`ProjectUnderstandingSummary.tsx`)
+
+Human-readable summary of what Project Intelligence detected before AI generation. Shows detected/inferred/unknown status for each project attribute, module chips (green=covered, orange=uncovered), entry points, stats, and potential gaps.
+
+### Phase F — Test Plan layer (`src/services/aiTestGenerator/TestPlanBuilder.ts`)
+
+Intermediate step between ingestion and generation. The plan describes WHAT will be tested before generating HOW (actual steps).
+
+- `buildHeuristicTestPlan(knowledge, existingCount, moduleFilter?)` — **synchronous, no AI required**. Instant preview using `CodeModule.type` to generate type-appropriate coverage areas.
+- `buildTestPlanPrompt(knowledge, moduleFilter?)` — prompt string for AI-enhanced plans (optional upgrade).
+
+UI: `TestPlanReviewPanel` shows accordion per module with coverage areas, category chips, priority chips.
+
+### Phase G — True coverage analysis (`src/services/coverageAnalysisService.ts`)
+
+Maps actual TestHub `test_cases` (not project source test files) against `ProjectKnowledge.codeModules`.
+
+- `analyzeCoverage(knowledge, testCases[])` → `CoverageAnalysisResult { entries[], estimatedPercent, disclaimer, ... }`
+- Matching strategy: (1) exact module name substring in test title, (2) ≥50% module name token overlap in title, (3) module name token in test tags
+- Coverage levels: `none` (0), `weak` (1–2), `moderate` (3–5), `strong` (6+)
+- Always labeled "TestHub AI Coverage Estimate" — explicitly NOT code coverage
+
+UI: `CoverageAnalysisPanel` with color-coded bars and disclaimer.
+
+### Phase H — Duplicate detection
+
+No changes needed. `SuggestionEngine.checkDuplicate()` (Jaccard 0.6/0.7 thresholds) is reused by JSON import for deduplication.
+
+### Phase J — Source traceability / provenance
+
+New DB column: `test_cases.ai_generation_metadata JSONB DEFAULT NULL` (migration `016_m12_test_traceability.sql`).
+
+New type `AiGenerationMetadata`:
+```typescript
+{ source_type: 'project_intelligence' | 'manual_analysis' | 'json_import';
+  project_id?: string; generation_mode?: string; generation_scope?: string;
+  generated_at: string; connector_model?: string; }
+```
+
+- Manual cases: `null` (untouched)
+- AI-generated: populated by `importAccepted()` with `source_type: 'project_intelligence'` or `'manual_analysis'`
+- JSON-imported: populated by `importJsonTestCases()` with `source_type: 'json_import'`
+
+### Phase M — Updated wizard flow
+
+| Mode | Steps |
+|---|---|
+| Project Intelligence | Select Project → **Project Understanding** → **Test Plan** → Configure & Generate → Review & Import |
+| Manual Source Files  | Analyze Project → Preview Analysis → Configure & Generate → Review & Import (unchanged) |
+
+Both modes converge at the same `SuggestionList → BulkImportDialog → importAccepted()` path.
+
+### Security (Phase N)
+
+- Raw project source is never stored in Supabase (M10 invariant, unchanged)
+- No new TestHub-owned AI API key (M8 invariant, unchanged)
+- Edge function fallback remains explicitly opt-in (M8 invariant, unchanged)
+- `ai_generation_metadata` column stores only compact, non-sensitive metadata (no prompts, no source code, no keys)
+
+### Architecture invariants (Phase P)
+
+All 12 invariants verified in `src/__tests__/m12/m12-invariants.test.ts`:
+1. ONE canonical `TestCase` model — all sources produce the same shape
+2. ONE normalizer entry point — `normalizeTestCase()` for all sources
+3. Priority output ∈ `{ critical, high, medium, low }`
+4. Category output ∈ 13 canonical values
+5. JSON import validation = normalizer validation
+6. `parseJsonInput` supports all 5 documented input shapes
+7. Heuristic test plan is synchronous — no AI required
+8. Coverage analysis uses TestHub `test_cases`, not `existingTestPaths`
+9. `validCount + invalidCount === results.length` in batch normalization
+10. `draft.steps` is always an array, never undefined
+11. `draft.tags` is always `string[]`, never a plain string
+12. Coverage result always includes "TestHub AI Coverage Estimate" disclaimer
+
+### Test coverage (M12)
+
+4 new test files, 59 tests.
+
+| File | Tests | Covers |
+|------|-------|--------|
+| `m12/testCaseNormalizer.test.ts` | 18 | normalizeCategory aliases, normalizeTestCase field coercion, priority aliases, tag normalization, step field aliases, batch tally |
+| `m12/jsonImportService.test.ts` | 16 | parseJsonInput shape support, dryRunJsonImport valid/invalid counting, error indexing |
+| `m12/coverageAnalysis.test.ts` | 9 | Title/tag matching, coverage levels, estimatedPercent, existingTestPaths vs TestHub test_cases, disclaimer |
+| `m12/m12-invariants.test.ts` | 16 | All 12 architecture invariants |
+
+**Total test count: 1036** (was 977)
+
+---
+
+## M13 — End-to-End Validation & Hardening
+
+**Committed:** M13 (Phase 6)
+**Test count:** 1109 (73 new M13 tests, in `src/__tests__/m13/`)
+
+### Audit scope
+
+M13 performed a full 10-phase audit of the M10–M12 pipeline before adding any new capabilities. Read-only audit of every service, migration, and UI component in the pipeline. Three defects found and fixed.
+
+### Architecture verdict: SOUND
+
+The canonical invariant holds end-to-end:
+
+```
+Project Source
+  → ProjectIngestionService (filter + analyze + index + understand)
+  → ProjectKnowledge (compact metadata, no raw source)
+  → ProjectContextBuilder (token-budget-aware context)
+  → TestPlanBuilder (heuristic plan — synchronous, no AI)
+  → TestCaseGenerator.buildPromptFromContext() (AI prompt)
+  → AIOrchestrationService (user connector or edge-function fallback)
+  → TestSuggestion[] (NEVER persisted without human review)
+  → Human Review (accept/reject)
+  → AITestGenerationEngine.importAccepted()
+  → test_cases table (canonical TestCase, ai_generation_metadata populated)
+  → TestExecutionPage (unchanged — source-agnostic)
+  → test_results table
+
+JSON Import Path:
+  JSON text → parseJsonInput() → normalizeTestCaseBatch()
+  → dryRunJsonImport() (preview, no DB)
+  → importJsonTestCases()
+  → test_cases table (canonical TestCase, ai_generation_metadata populated)
+  → TestExecutionPage (same path, no branching)
+
+Manual Creation:
+  UI form → testCaseService.create()
+  → test_cases table (ai_generation_metadata = NULL)
+  → TestExecutionPage (same path)
+```
+
+### Convergence invariant
+
+All three sources produce identical required columns in `test_cases`:
+`project_id`, `module_id`, `title`, `description`, `priority`, `status: 'draft'`, `tags`, `is_automation_ready`, `estimated_minutes`, `preconditions`, `created_by`.
+
+The only diverging column is `ai_generation_metadata` (JSONB):
+- Manual: `NULL`
+- AI-generated: `{source_type: 'project_intelligence', project_id, generation_mode, connector_model, generated_at}`
+- JSON-imported: `{source_type: 'json_import', project_id, generated_at}`
+
+`TestExecutionPage` loads test cases by assignment ID via the `test_assignments` → `test_cases` join. It does not filter or branch on `ai_generation_metadata`. All three sources reach the same execution UI.
+
+### Defects found and fixed
+
+**DEF-1: `TestPlanBuilder.buildModulePlan()` — `currentTestCount` hardcoded**
+- File: `src/services/aiTestGenerator/TestPlanBuilder.ts:108`
+- Was: `currentTestCount: isCovered ? 1 : 0`
+- Fix: `currentTestCount: module.testCount` (uses the actual project-source test count from `CodeModule`)
+- Impact: Test plan UI showed every covered module as "1 test" regardless of actual test count. Now shows the real count.
+
+**DEF-2: `SuggestionList.tsx` — `ALL_CATEGORIES` stale**
+- File: `src/features/ai-test-generator/SuggestionList.tsx:14-17`
+- Was: only 8 original categories
+- Fix: Added 5 new M12 categories (`integration`, `performance`, `api`, `data_validation`, `compatibility`)
+- Impact: Dead code (the list wasn't used for active filtering), but misleading. Now consistent with `TestCategory`.
+
+**DEF-3: `AITestGenerationEngine.ts` — `automation_config: ?? undefined`**
+- File: `src/services/aiTestGenerator/AITestGenerationEngine.ts:359`
+- Was: `step.automation_config ?? undefined`
+- Fix: `step.automation_config ?? null`
+- Impact: Supabase JS client omits columns with `undefined` rather than explicitly inserting NULL. Now consistent with JSON import path and schema default.
+
+### Audit findings — architecture is correct, not defects
+
+**Finding A** — Both `importAccepted()` and `importJsonTestCases()` write directly to supabase, not through `testCaseService.create()`. This is intentional — both paths produce the same DB outcome. If `testCaseService.create()` ever gains middleware, these paths would need to be updated.
+
+**Finding B** — JSON import does not add `ai:${category}` tags (unlike AI import). This is intentional — JSON-imported cases have no AI category signal. The source is identified via `ai_generation_metadata.source_type = 'json_import'`.
+
+**Finding C** — `CoverageAnalysisService` is correctly labeled "TestHub AI Coverage Estimate" — it is NOT code coverage, NOT execution coverage. It is a heuristic logical estimate of which project modules have related TestHub test cases.
+
+**Finding D** — `SuggestionEngine.tokenize()` filters tokens with length ≤ 2. Short terms like "UI", "to" are always ignored in duplicate detection. This is correct behavior — short tokens add noise to Jaccard similarity.
+
+### Storage audit — raw source never persisted
+
+Verified in M13 that no raw project source reaches:
+- `test_cases` — only title, description, steps (human-authored or AI-derived)
+- `test_case_steps` — only step descriptions and expected results
+- `project_knowledge` — file summaries (purpose + symbols + imports only, no raw content)
+- `project_file_indexes` — compact file metadata (paths, hashes, categories, no content)
+- `ai_generation_metadata` — only compact identifiers (project_id, module names, generation mode)
+
+### Security audit
+
+- API keys stored in `sessionStorage` via `SecureCredentialStore`, never `localStorage`
+- GitHub PAT held in memory only, never written to Supabase
+- `SecretScanner` (22 patterns) runs before any file content reaches AI context
+- `ai_generation_metadata` JSONB never contains credentials, raw source, or AI prompts
+- JSON import cannot inject credentials into metadata — the metadata is constructed internally, not derived from the imported JSON content
+
+### Project understanding validation
+
+`ProjectStructureAnalyzer` correctly answers:
+
+| Question | Answer source |
+|---|---|
+| What is this project? | `knowledge.name`, `knowledge.description`, `knowledge.projectType` |
+| What is its purpose? | `knowledge.purpose`, `knowledge.description` |
+| What are its major modules? | `knowledge.codeModules[].{name, type, fileCount, description}` |
+| What are the entry points? | `knowledge.entryPoints[].{path, kind, name}` |
+| What should be tested? | `TestPlanBuilder.buildHeuristicTestPlan()` based on module types |
+
+Framework detection covers: React, React Native, Next.js, Vue, Angular, Svelte, Jetpack Compose, Android Views, SwiftUI, UIKit, Flutter, Express, Fastify, NestJS, Spring Boot, Django, FastAPI, ASP.NET, Hilt, Retrofit, Room.
+
+### Test coverage (M13)
+
+2 new test files, 73 tests.
+
+| File | Tests | Covers |
+|------|-------|--------|
+| `m13/m13-e2e-invariants.test.ts` | 40 | Canonical schema convergence, execution compatibility, TestPlanBuilder fix, JSON shapes, failure matrix, duplicate detection, storage invariants |
+| `m13/m13-project-understanding.test.ts` | 33 | ProjectStructureAnalyzer (React, Android, empty, secrets), TestPlan module coverage, coverage areas, currentTestCount fix, module filter, prompt validation, module type mapping |
+
+**Total test count: 1109** (was 1036)
+
+### Known limitations
+
+1. `currentTestCount` in the test plan reflects project source test files (from `CodeModule.testCount`), not TestHub test cases. A future milestone could pass TestHub test counts into `buildHeuristicTestPlan()` for a richer plan.
+2. `CoverageAnalysisService` uses title/tag substring matching — not actual execution results. Execution-based coverage would require joining `test_results` to `test_cases` to `modules`.
+3. The M8 edge-function fallback is opt-in and tested in isolation — end-to-end AI generation requires a real configured connector (Gemini, Ollama, or OAI-compat).
+4. `testCaseService.create()` is not the insertion path for AI-generated or JSON-imported cases — they use direct Supabase inserts with identical schema.
+
+---
+
+## M14 — End-to-End Project-to-Test Validation
+
+**Goal:** Prove that the entire pipeline from Project Source → AI Test Plan → Canonical `test_cases` → Test Execution → Coverage is one coherent system, with no parallel path or duplicate execution engine.
+
+### Core invariant
+
+```
+Project Source → Ingestion → Project Understanding → Testing Scope → AI Test Plan
+→ AI Test Cases → Human Review → canonical test_cases → Test Execution → Results/Coverage
+```
+
+Manual test creation, JSON import, and AI generation all write to the **same** `test_cases` table and use the **same** `test_results`/`test_run_cases` execution pipeline. There is no secondary execution path.
+
+### Canonical schema convergence (3-path proof)
+
+All three test case creation paths produce rows with identical required columns:
+
+| Column | Manual | JSON Import | AI Generated |
+|--------|--------|-------------|--------------|
+| `id`, `project_id`, `module_id` | ✓ | ✓ | ✓ |
+| `test_id`, `title`, `description` | ✓ | ✓ | ✓ |
+| `priority`, `status`, `tags` | ✓ | ✓ | ✓ |
+| `is_automation_ready`, `estimated_minutes` | ✓ | ✓ | ✓ |
+| `preconditions`, `steps[]` | ✓ | ✓ | ✓ |
+| `ai_generation_metadata` | NULL | `{source_type:'json_import',...}` | `{source_type:'project_intelligence',...}` |
+
+### Defects found and fixed
+
+| ID | Component | Defect | Fix |
+|----|-----------|--------|-----|
+| DEF-M14-1 | `AITestGeneratorPage` → `TestPlanReviewPanel` | `existingCounts` prop hardcoded to `coveredModules ? 1 : 0`; per-module counts never loaded | Load actual `test_cases` per module via `testCaseService.list()` and pass real `moduleTestCounts` map |
+| DEF-M14-2 | `BulkImportDialog` | When launched from PI mode, project dropdown always started empty regardless of which project was being analyzed | Added `preselectedProjectId` prop that auto-selects the correct project on open |
+
+### Source provider status
+
+| Provider | Status | Notes |
+|----------|--------|-------|
+| Local filesystem | ✓ Implemented | Full connect/list/read |
+| ZIP archive | ✓ Implemented | Extracts and reads |
+| GitHub (PAT) | ✓ Implemented | REST API via PAT |
+| Google Drive | ✗ Stub | Throws `ProviderNotImplementedError` |
+| OneDrive | ✗ Stub | Throws `ProviderNotImplementedError` |
+
+Cloud provider stubs are explicit and intentional. They do NOT silently fail or return empty results.
+
+### Test coverage (M14)
+
+3 new test files, 140 tests.
+
+| File | Tests | Covers |
+|------|-------|--------|
+| `m14/m14-pipeline-invariants.test.ts` | ~50 | 3-path canonical convergence, schema completeness, execution agnosticism, coverage analysis, JSON import compatibility, accepted/rejected filtering |
+| `m14/m14-ingestion-validation.test.ts` | ~50 | Multi-module filter engine (20-file fixture), secret scanner API, binary/ignored detection, provider stub behavior, `ProviderNotImplementedError` |
+| `m14/m14-scope-and-plan.test.ts` | ~40 | `FileSummary` required fields, `ProjectContext` field names, `SuggestionEngine` dedup behavior, `normalizeTestCase` purity (no status injection), `analyzeCoverage` import |
+
+**Total test count: 1249** (was 1109)
+
+### Security invariants (M14 verified)
+
+- Raw project source is NEVER stored in Supabase — ingestion pipeline is local-only
+- `ai_generation_metadata` stores project reference IDs only, not file content
+- M8 edge-function fallback remains explicitly opt-in
+- No TestHub-owned AI API key introduced
+- `SecretScanner` uses `scan(content, filePath)` → returns `SecretFinding[]`; sensitive files are excluded from `ProjectContext` before any AI call
+
+### Known limitations (updated)
+
+1. `currentTestCount` in the test plan reflects project source test files (from `CodeModule.testCount`), not TestHub test cases — the field is populated at scan time.
+2. `CoverageAnalysisService` uses title/tag substring matching, not actual execution results.
+3. Cloud providers (Google Drive, OneDrive) are stubs — documented and throw explicitly; no silent fallback.
+4. The M8 edge-function fallback is opt-in and tested in isolation.

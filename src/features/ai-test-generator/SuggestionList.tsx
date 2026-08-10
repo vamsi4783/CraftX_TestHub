@@ -14,6 +14,7 @@ import { SuggestionCard } from './SuggestionCard';
 const ALL_CATEGORIES: TestCategory[] = [
   'smoke', 'happy_path', 'validation', 'boundary',
   'negative', 'permission', 'navigation', 'regression',
+  'integration', 'performance', 'api', 'data_validation', 'compatibility',
 ];
 
 type SortKey = 'confidence_desc' | 'confidence_asc' | 'category' | 'priority';

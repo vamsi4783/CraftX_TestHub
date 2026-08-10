@@ -16,14 +16,20 @@ import type { ProjectContext, ProjectKnowledge } from '../projectIngestion/types
 // ─── Category descriptions ────────────────────────────────────────────────────
 
 const CATEGORY_DESCRIPTIONS: Record<TestCategory, string> = {
-  smoke:       'Basic sanity checks: app launches, key screens load.',
-  happy_path:  'Primary user flows with valid input completing successfully.',
-  validation:  'Form field validation: required fields, format errors, error messages.',
-  boundary:    'Edge-case inputs: empty strings, max-length, numeric extremes.',
-  negative:    'Intentionally wrong input, invalid auth, unauthorized actions.',
-  permission:  'Feature gating, role-based access, OS permission prompts.',
-  navigation:  'Back navigation, deep links, screen transitions, flow continuity.',
-  regression:  'Tests for known critical paths that must not regress.',
+  smoke:          'Basic sanity checks: app launches, key screens load.',
+  happy_path:     'Primary user flows with valid input completing successfully.',
+  validation:     'Form field validation: required fields, format errors, error messages.',
+  boundary:       'Edge-case inputs: empty strings, max-length, numeric extremes.',
+  negative:       'Intentionally wrong input, invalid auth, unauthorized actions.',
+  permission:     'Feature gating, role-based access, OS permission prompts.',
+  navigation:     'Back navigation, deep links, screen transitions, flow continuity.',
+  regression:     'Tests for known critical paths that must not regress.',
+  // M12 extended
+  integration:    'Cross-module interactions: two or more modules working together end-to-end.',
+  performance:    'Response time, throughput, resource usage under expected load.',
+  api:            'API contract: correct request/response schema, status codes, error bodies.',
+  data_validation:'Data integrity: DB constraints, type enforcement, duplicate prevention.',
+  compatibility:  'Behaviour across OS versions, device types, or screen sizes.',
 };
 
 // ─── JSON schema that Claude must follow ─────────────────────────────────────
@@ -46,7 +52,7 @@ const RESPONSE_SCHEMA = `
           "notes": "string | null"
         }
       ],
-      "category": "smoke | happy_path | validation | boundary | negative | permission | navigation | regression",
+      "category": "smoke | happy_path | validation | boundary | negative | permission | navigation | regression | integration | performance | api | data_validation | compatibility",
       "reason": "string (why this test was generated and what risk it covers)",
       "source_files": ["string"],
       "confidence": number (0.0–1.0),
@@ -174,47 +180,73 @@ Generate test cases now:`;
     const max = options.maxSuggestions ?? 20;
     const coveragePct = Math.round(knowledge.coverageScore * 100);
 
-    return `You are an expert QA engineer generating structured test cases based on project intelligence.
+    // Entry points for AI understanding
+    const entryPointsSection = knowledge.entryPoints.length > 0
+      ? knowledge.entryPoints.slice(0, 6).map(ep => `  - ${ep.kind}: ${ep.path}${ep.name ? ` (${ep.name})` : ''}`).join('\n')
+      : '  (none detected)';
+
+    // Existing test paths in the project source (different from TestHub test cases)
+    const sourceTestPaths = knowledge.existingTestPaths.length > 0
+      ? `${knowledge.existingTestPaths.length} test file(s) detected in project source`
+      : 'No test files detected in project source';
+
+    return `You are an expert QA engineer generating project-specific test cases from project intelligence.
 
 IMPORTANT RULES:
 - Generate ONLY the test categories listed below.
-- Each test must be actionable and grounded in the project structure provided.
-- Do NOT invent screens, endpoints, or features not present in the project.
-- Prioritize UNCOVERED modules — prefer generating tests for modules with no existing coverage.
+- Each test MUST be specific to this project — not generic boilerplate.
+- Reference real module names, features, and workflows from the project context below.
+- Prioritize UNCOVERED modules — generate tests for modules with no existing TestHub coverage first.
 - Avoid generating tests that duplicate existing test titles listed below.
 - Return ONLY valid JSON matching the schema. No markdown. No explanation outside JSON.
 - Generate at most ${max} suggestions total.
 - Confidence: 0.9+ for clearly-supported tests, 0.6–0.9 for inferred, below 0.6 for speculative.
 
-PROJECT OVERVIEW:
-  Name:         ${ctx.projectName}
-  Summary:      ${ctx.projectSummary}
-  Tech Stack:   ${ctx.techStack}
-  Architecture: ${ctx.architecture ?? 'Unknown'}
-  Coverage:     ${coveragePct}% of modules have tests
+═══ PROJECT UNDERSTANDING ═══════════════════════════════════════════════════════
 
-MODULES IN SCOPE:
+PROJECT:      ${ctx.projectName}
+PURPOSE:      ${ctx.projectSummary}
+TECHNOLOGY:   ${ctx.techStack}
+ARCHITECTURE: ${ctx.architecture ?? 'Unknown'}
+BUILD SYSTEM: ${knowledge.buildSystem ?? 'Unknown'}
+
+MAJOR ENTRY POINTS:
+${entryPointsSection}
+
+MODULES IN SCOPE (${ctx.relevantModules.length} total):
 ${modulesSection}
 
-UNCOVERED MODULES (prioritize these):
+UNCOVERED MODULES — focus test generation here:
 ${uncoveredSection}
 
-KEY FILES IN SCOPE:
+KEY SOURCE FILES:
 ${filesSection}
 
-MAIN DEPENDENCIES:
+KEY DEPENDENCIES:
 ${depsSection}
 
-EXISTING TESTS (do NOT duplicate these — identify gaps instead):
+TEST CONTEXT:
+  TestHub coverage: ${coveragePct}% of modules have existing tests
+  Project source:   ${sourceTestPaths}
+
+EXISTING TESTHUB TESTS (DO NOT duplicate — identify gaps):
 ${existingSection}
+
+═══ GENERATION INSTRUCTIONS ═════════════════════════════════════════════════════
 
 CATEGORIES TO GENERATE:
 ${categoryList}
 
+For each test case:
+  - title must name the specific module/feature/workflow being tested
+  - steps must describe concrete actions in the context of THIS project
+  - coverage_area must name the specific module or feature, not "the app"
+  - reason must explain what risk or gap this test addresses
+
 RESPONSE SCHEMA (return exactly this structure):
 ${RESPONSE_SCHEMA}
 
-Generate test cases now:`;
+Generate project-specific test cases now:`;
   }
 
   /**
@@ -298,7 +330,18 @@ Generate test cases now:`;
     const valid: TestCategory[] = [
       'smoke', 'happy_path', 'validation', 'boundary',
       'negative', 'permission', 'navigation', 'regression',
+      'integration', 'performance', 'api', 'data_validation', 'compatibility',
     ];
-    return valid.includes(v as TestCategory) ? v as TestCategory : 'smoke';
+    if (valid.includes(v as TestCategory)) return v as TestCategory;
+    // common alias normalisation
+    const aliases: Record<string, TestCategory> = {
+      'happy path': 'happy_path',
+      'edge case':  'boundary',
+      'functional': 'happy_path',
+      'auth':       'permission',
+      'e2e':        'integration',
+      'end to end': 'integration',
+    };
+    return aliases[v.toLowerCase()] ?? 'smoke';
   }
 }

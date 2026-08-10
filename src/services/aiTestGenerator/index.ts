@@ -6,6 +6,7 @@ export { ScreenAnalyzer }                                 from './ScreenAnalyzer
 export { FlowAnalyzer }                                   from './FlowAnalyzer.js';
 export { TestCaseGenerator }                              from './TestCaseGenerator.js';
 export { SuggestionEngine, jaccardSimilarity }            from './SuggestionEngine.js';
+export { buildHeuristicTestPlan, buildTestPlanPrompt }                 from './TestPlanBuilder.js';
 export type {
   ProjectType, ProjectModel, Screen, UIElement, NavigationEdge,
   APIEndpoint, FormDefinition, FormField, AppFlow,
@@ -13,6 +14,8 @@ export type {
   GenerationOptions, GenerationResult, GenerationMeta,
   DuplicateCheckResult,
   GenerationMode, ContextGenerationOptions, GenerationScope,
+  AiTestPlan, TestPlanModule, TestPlanCoverageArea,
+  GenerationProvenance, JsonImportResult,
 }                                                         from './types.js';
 export {
   GENERATION_MODE_CATEGORIES,

@@ -90,7 +90,13 @@ export type TestCategory =
   | 'negative'
   | 'permission'
   | 'navigation'
-  | 'regression';
+  | 'regression'
+  // M12: extended categories
+  | 'integration'
+  | 'performance'
+  | 'api'
+  | 'data_validation'
+  | 'compatibility';
 
 /** Draft step — mirrors Omit<TestCaseStep, 'id'|'test_case_id'|timestamps> */
 export interface DraftStep {
@@ -154,11 +160,11 @@ export type GenerationMode =
   | 'module_specific';
 
 export const GENERATION_MODE_CATEGORIES: Record<GenerationMode, TestCategory[]> = {
-  full_suite:      ['smoke', 'happy_path', 'validation', 'boundary', 'negative', 'navigation', 'regression'],
-  functional:      ['happy_path', 'validation', 'boundary'],
+  full_suite:      ['smoke', 'happy_path', 'validation', 'boundary', 'negative', 'navigation', 'regression', 'integration'],
+  functional:      ['happy_path', 'validation', 'boundary', 'integration'],
   ui:              ['smoke', 'navigation', 'validation'],
   regression:      ['regression', 'smoke'],
-  negative_edge:   ['negative', 'boundary', 'permission'],
+  negative_edge:   ['negative', 'boundary', 'permission', 'data_validation'],
   security:        ['permission', 'negative'],
   module_specific: ['smoke', 'happy_path', 'validation', 'negative'],
 };
@@ -214,6 +220,7 @@ export interface GenerationMeta {
 export interface GenerationResult {
   suggestions:  TestSuggestion[];
   meta:         GenerationMeta;
+  provenance?:  GenerationProvenance;
 }
 
 // ─── Duplicate detection ──────────────────────────────────────────────────────
@@ -222,4 +229,54 @@ export interface DuplicateCheckResult {
   isDuplicate:  boolean;
   duplicateOf?: string;
   similarity:   number;  // 0–1
+}
+
+// ─── M12: AI Test Plan (Phase F) ─────────────────────────────────────────────
+// Intermediate layer between Project Intelligence and full test generation.
+// Lets the user review WHAT will be tested before generating HOW.
+
+export interface TestPlanCoverageArea {
+  name:        string;   // e.g. "Add Stock", "Negative Quantity Validation"
+  category:    TestCategory;
+  priority:    'high' | 'medium' | 'low';
+  rationale:   string;  // why this area needs testing
+  detected:    boolean;  // true = detected from knowledge; false = inferred
+}
+
+export interface TestPlanModule {
+  moduleId:      string;
+  moduleName:    string;
+  coverageAreas: TestPlanCoverageArea[];
+  currentTestCount: number;  // existing TestHub tests
+  estimatedNewTests: number;
+}
+
+export interface AiTestPlan {
+  projectName:  string;
+  generatedAt:  string;
+  modules:      TestPlanModule[];
+  totalEstimatedTests: number;
+  coverageGaps: string[];  // human-readable list of identified gaps
+}
+
+// ─── M12: Generation Provenance ──────────────────────────────────────────────
+
+export interface GenerationProvenance {
+  source_type:               'project_intelligence' | 'manual_analysis';
+  project_id?:               string;
+  generation_mode?:          GenerationMode;
+  generation_scope?:         GenerationScope;
+  module_ids_from_knowledge?: string[];
+  generated_at:              string;
+  connector_model?:          string;
+}
+
+// ─── M12: JSON Import ────────────────────────────────────────────────────────
+
+export interface JsonImportResult {
+  total:      number;
+  imported:   number;
+  duplicates: number;
+  invalid:    number;
+  errors:     string[];
 }

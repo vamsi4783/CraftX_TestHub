@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  Box, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, Typography, Button, Chip, TextField, Select, MenuItem, FormControl,
   InputLabel, InputAdornment, Skeleton, IconButton, Dialog, DialogTitle,
   DialogContent, DialogActions, Grid, CircularProgress,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import SearchIcon from '@mui/icons-material/Search';
 import AssignmentIcon from '@mui/icons-material/Assignment';
+import { JsonImportDialog } from './JsonImportDialog';
 import { testCaseService } from '@/services/testCaseService';
 import { projectService } from '@/services/projectService';
 import { moduleService } from '@/services/moduleService';
@@ -91,7 +93,9 @@ export function TestCasesPage() {
   const filterProject = searchParams.get('project') ?? '';
   const setFilterProject = (id: string) => setSearchParams(prev => { const p = new URLSearchParams(prev); id ? p.set('project', id) : p.delete('project'); return p; }, { replace: true });
   const [filterStatus, setFilterStatus] = useState('');
-  const [createOpen, setCreateOpen] = useState(false);
+  const [createOpen, setCreateOpen]       = useState(false);
+  const [jsonImportOpen, setJsonImportOpen] = useState(false);
+  const qc = useQueryClient();
 
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: () => projectService.list() });
   const { data: testCases = [], isLoading } = useQuery({
@@ -105,7 +109,14 @@ export function TestCasesPage() {
         title="Test Cases"
         subtitle="Manage your test case library across all projects."
         actions={
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>New Test Case</Button>
+          <Stack direction="row" spacing={1}>
+            <Button variant="outlined" startIcon={<UploadFileIcon />} onClick={() => setJsonImportOpen(true)}>
+              Import JSON
+            </Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
+              New Test Case
+            </Button>
+          </Stack>
         }
       />
 
@@ -164,6 +175,15 @@ export function TestCasesPage() {
       )}
 
       <CreateTestCaseDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+
+      <JsonImportDialog
+        open={jsonImportOpen}
+        onClose={() => setJsonImportOpen(false)}
+        onImported={({ imported }) => {
+          setJsonImportOpen(false);
+          if (imported > 0) qc.invalidateQueries({ queryKey: ['test-cases'] });
+        }}
+      />
     </Box>
   );
 }
