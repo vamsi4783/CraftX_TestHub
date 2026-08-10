@@ -91,16 +91,16 @@ export function TestCasesPage() {
   const [search, setSearch] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
   const filterProject = searchParams.get('project') ?? '';
-  const setFilterProject = (id: string) => setSearchParams(prev => { const p = new URLSearchParams(prev); id ? p.set('project', id) : p.delete('project'); return p; }, { replace: true });
+  const setFilterProject = (id: string) => setSearchParams(prev => { const p = new URLSearchParams(prev); id ? p.set('project', id) : p.delete('project'); p.delete('import'); return p; }, { replace: true });
   const [filterStatus, setFilterStatus] = useState('');
   const [createOpen, setCreateOpen]       = useState(false);
-  const [jsonImportOpen, setJsonImportOpen] = useState(false);
+  const [jsonImportOpen, setJsonImportOpen] = useState(() => searchParams.get('import') === 'true');
   const qc = useQueryClient();
 
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: () => projectService.list() });
   const { data: testCases = [], isLoading } = useQuery({
     queryKey: ['test-cases', filterProject, filterStatus, search],
-    queryFn: () => testCaseService.list(filterProject || '%', { status: filterStatus || undefined, search: search || undefined }),
+    queryFn: () => testCaseService.list(filterProject || undefined, { status: filterStatus || undefined, search: search || undefined }),
   });
 
   return (

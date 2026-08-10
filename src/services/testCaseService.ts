@@ -2,12 +2,13 @@ import { supabase } from '@/lib/supabase';
 import type { TestCase, TestCaseStep, TestAssignment, TestResult } from '@/types';
 
 export const testCaseService = {
-  async list(projectId: string, filters?: { module_id?: string; status?: string; search?: string }): Promise<TestCase[]> {
+  async list(projectId?: string, filters?: { module_id?: string; status?: string; search?: string }): Promise<TestCase[]> {
     let q = supabase
       .from('test_cases')
       .select(`*, module:modules(id,name), creator:profiles!created_by(id,full_name)`)
-      .eq('project_id', projectId)
       .order('test_id', { ascending: true });
+
+    if (projectId) q = q.eq('project_id', projectId);
 
     if (filters?.module_id) q = q.eq('module_id', filters.module_id);
     if (filters?.status)    q = q.eq('status', filters.status);

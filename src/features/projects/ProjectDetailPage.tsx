@@ -286,7 +286,7 @@ export function ProjectDetailPage() {
             <Grid item xs={12} sm={6} md={3}>
               <Card
                 sx={{ cursor: 'pointer', '&:hover': { boxShadow: 4 }, height: '100%' }}
-                onClick={() => navigate(`/ai-test-generator?project=${id}&mode=import`)}
+                onClick={() => navigate(`/test-cases?project=${id}&import=true`)}
               >
                 <CardContent sx={{ textAlign: 'center', py: 3 }}>
                   <UploadFileIcon sx={{ fontSize: 36, color: 'info.main', mb: 1 }} />

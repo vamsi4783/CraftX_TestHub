@@ -346,7 +346,7 @@ export function AITestGeneratorPage() {
               </Typography>
               <ProjectIntelligenceInputPanel
                 onConfigure={handlePIConfigure}
-                isAnalyzing={isAnalyzing}
+                isAnalyzing={isConfiguringPI}
               />
             </>
           )}
