@@ -7,9 +7,14 @@ import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import PeopleIcon from '@mui/icons-material/People';
 import GitHubIcon from '@mui/icons-material/GitHub';
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { projectService } from '@/services/projectService';
 import { releaseService } from '@/services/releaseService';
 import { bugService } from '@/services/bugService';
+import { testCaseService } from '@/services/testCaseService';
 import { PageHeader } from '@/components/common/PageHeader';
 import { LoadingState } from '@/components/common/LoadingState';
 import { StatusChip } from '@/components/common/StatusChip';
@@ -57,6 +62,12 @@ export function ProjectDetailPage() {
   const { data: members = [] } = useQuery({
     queryKey: ['project-members', id],
     queryFn: () => projectService.getMembers(id!),
+    enabled: !!id,
+  });
+
+  const { data: testCases = [] } = useQuery({
+    queryKey: ['test-cases', id],
+    queryFn: () => testCaseService.list(id!),
     enabled: !!id,
   });
 
@@ -152,6 +163,7 @@ export function ProjectDetailPage() {
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
         <Tab label={`Releases (${releases.length})`} icon={<RocketLaunchIcon />} iconPosition="start" />
         <Tab label={`Bugs (${openBugs.length})`} icon={<BugReportIcon />} iconPosition="start" />
+        <Tab label={`Testing (${testCases.length})`} icon={<AssignmentIcon />} iconPosition="start" />
         <Tab label={`Team (${members.length})`} icon={<PeopleIcon />} iconPosition="start" />
       </Tabs>
 
@@ -217,8 +229,123 @@ export function ProjectDetailPage() {
         </Box>
       )}
 
-      {/* Team tab */}
+      {/* Testing tab */}
       {tab === 2 && (
+        <Box>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+            <Box>
+              <Typography variant="h6" fontWeight={700}>Testing Hub</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {testCases.length === 0
+                  ? 'No test cases yet. Index this project and generate tests to get started.'
+                  : `${testCases.length} test case${testCases.length !== 1 ? 's' : ''} · Use the actions below to grow your test suite.`}
+              </Typography>
+            </Box>
+            {testCases.length > 0 && (
+              <Button
+                variant="contained"
+                startIcon={<PlayArrowIcon />}
+                onClick={() => navigate(`/test-executions/new?project=${id}`)}
+              >
+                Run Tests
+              </Button>
+            )}
+          </Box>
+
+          <Grid container spacing={2} mb={3}>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card
+                sx={{ cursor: 'pointer', '&:hover': { boxShadow: 4 }, height: '100%' }}
+                onClick={() => navigate(`/project-intelligence/${id}`)}
+              >
+                <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                  <AccountTreeIcon sx={{ fontSize: 36, color: 'primary.main', mb: 1 }} />
+                  <Typography variant="subtitle2" fontWeight={700}>Understand Project</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Index source code to enable AI-powered analysis
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} sm={6} md={3}>
+              <Card
+                sx={{ cursor: 'pointer', '&:hover': { boxShadow: 4 }, height: '100%' }}
+                onClick={() => navigate(`/ai-test-generator?project=${id}`)}
+              >
+                <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                  <AutoAwesomeIcon sx={{ fontSize: 36, color: 'secondary.main', mb: 1 }} />
+                  <Typography variant="subtitle2" fontWeight={700}>Generate Tests</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Use AI to generate test cases from project intelligence
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} sm={6} md={3}>
+              <Card
+                sx={{ cursor: 'pointer', '&:hover': { boxShadow: 4 }, height: '100%' }}
+                onClick={() => navigate(`/ai-test-generator?project=${id}&mode=import`)}
+              >
+                <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                  <UploadFileIcon sx={{ fontSize: 36, color: 'info.main', mb: 1 }} />
+                  <Typography variant="subtitle2" fontWeight={700}>Import JSON</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Bulk import test cases from a JSON file
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} sm={6} md={3}>
+              <Card
+                sx={{ cursor: 'pointer', '&:hover': { boxShadow: 4 }, height: '100%' }}
+                onClick={() => navigate(`/test-cases?project=${id}`)}
+              >
+                <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                  <AssignmentIcon sx={{ fontSize: 36, color: 'success.main', mb: 1 }} />
+                  <Typography variant="subtitle2" fontWeight={700}>View Test Cases</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {testCases.length} test case{testCases.length !== 1 ? 's' : ''} in this project
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {testCases.length > 0 && (
+            <Box>
+              <Typography variant="subtitle2" fontWeight={600} mb={1.5}>Recent Test Cases</Typography>
+              <Box display="flex" flexDirection="column" gap={1}>
+                {testCases.slice(0, 5).map(tc => (
+                  <Card
+                    key={tc.id}
+                    sx={{ cursor: 'pointer', '&:hover': { boxShadow: 2 } }}
+                    onClick={() => navigate(`/test-cases/${tc.id}`)}
+                  >
+                    <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                      <Box display="flex" alignItems="center" gap={1.5}>
+                        <Typography variant="body2" fontWeight={500} flex={1} noWrap>{tc.title}</Typography>
+                        <Chip label={tc.priority} size="small" color={tc.priority === 'high' ? 'error' : tc.priority === 'medium' ? 'warning' : 'default'} variant="outlined" />
+                        <StatusChip status={tc.status} />
+                      </Box>
+                    </CardContent>
+                  </Card>
+                ))}
+                {testCases.length > 5 && (
+                  <Button variant="text" size="small" onClick={() => navigate(`/test-cases?project=${id}`)}>
+                    View all {testCases.length} test cases →
+                  </Button>
+                )}
+              </Box>
+            </Box>
+          )}
+        </Box>
+      )}
+
+      {/* Team tab */}
+      {tab === 3 && (
         <Grid container spacing={2}>
           {members.map(m => (
             <Grid item xs={12} sm={6} md={3} key={m.id}>

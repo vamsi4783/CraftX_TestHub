@@ -141,6 +141,9 @@ export class ProjectKnowledgeBuilder {
   ): ProjectKnowledge {
     const contentMap = new Map(contents.map(c => [c.path, c]));
 
+    // Attempt to extract a more accurate project name from package.json or README.
+    const resolvedName = this._extractProjectName(contentMap) ?? projectName;
+
     const fileSummaries = this._buildFileSummaries(files, contentMap, structure);
 
     const coveredModules   = this._computeCoveredModules(files, structure.codeModules);
@@ -162,7 +165,7 @@ export class ProjectKnowledgeBuilder {
       sourceId,
       generatedAt:       new Date().toISOString(),
       schemaVersion:     1,
-      name:              projectName,
+      name:              resolvedName,
       description:       this._describeProject(structure, fileSummaries),
       purpose:           this._inferPurpose(structure, fileSummaries),
       languages:         structure.languages,
@@ -265,6 +268,30 @@ export class ProjectKnowledgeBuilder {
     const modules = structure.codeModules.length;
     const arch    = structure.architectureStyle ? ` (${structure.architectureStyle})` : '';
     return `${fw} ${lang} project with ${modules} module${modules !== 1 ? 's' : ''}${arch}. ${summaries.length} indexed files.`;
+  }
+
+  private _extractProjectName(contentMap: Map<string, SourceFileContent>): string | null {
+    // Try package.json "name" field first
+    for (const key of ['package.json', 'app/package.json']) {
+      const entry = contentMap.get(key);
+      if (entry?.content) {
+        try {
+          const pkg = JSON.parse(entry.content) as { name?: string };
+          if (typeof pkg.name === 'string' && pkg.name.trim()) {
+            return pkg.name.replace(/^@[^/]+\//, '').replace(/[-_]/g, ' ').trim();
+          }
+        } catch { /* malformed JSON */ }
+      }
+    }
+    // Try README.md first H1
+    for (const key of ['README.md', 'readme.md', 'README']) {
+      const entry = contentMap.get(key);
+      if (entry?.content) {
+        const m = entry.content.match(/^#\s+(.+)/m);
+        if (m) return m[1].trim();
+      }
+    }
+    return null;
   }
 
   private _inferPurpose(

@@ -201,3 +201,39 @@ Layers 1–15 as defined in M1–M8 milestone specifications. All layers impleme
 
 This document is effective as of the commit for Phase 3.5 validation (2026-08-07).  
 Git tag: `v1.0-phase35-freeze`
+
+---
+
+## 5. M15 — End-to-End Workflow Refinement (2026-08-10)
+
+**Milestone type:** Refinement (no new subsystems, no architecture changes)  
+**Status:** Complete
+
+### 5.1 Invariants preserved
+
+All architecture invariants from the Phase 3.5 freeze are unchanged:
+
+- Manual / JSON / AI-generated test cases all insert into `test_cases` and route through `TestExecutionPage`
+- No separate AI execution engine introduced
+- Raw project source is never stored in Supabase (in-memory only during ingestion)
+- No TestHub-owned AI API key introduced
+- Edge function fallback remains explicitly opt-in
+- `SecureCredentialStore` remains the secret boundary
+- Google Drive / OneDrive remain explicit stubs
+- Sensitive files remain excluded from AI context
+
+### 5.2 Changes shipped
+
+| Area | Change | Files |
+|---|---|---|
+| DB | Applied `ai_generation_metadata` JSONB column (migration 016, P0 fix) | Supabase remote |
+| ProjectIngestionPage | Project picker when no projectId in URL; post-ingestion CTA → AI Generator | `ProjectIngestionPage.tsx` |
+| AITestGeneratorPage | `?project=` URL param auto-populates PI mode; disabled CTA opacity + Tooltip + Alert; post-import navigate to `/test-cases` | `AITestGeneratorPage.tsx` |
+| ProjectDetailPage | Testing tab with action cards (Understand, Generate, Import, View, Run) | `ProjectDetailPage.tsx` |
+| ProjectKnowledgeBuilder | Name extracted from `package.json`/`README.md` before falling back to project name | `ProjectKnowledgeBuilder.ts` |
+| Tests | 9 new M15 unit tests; full suite: 1258 tests passing | `src/__tests__/m15/` |
+
+### 5.3 Test count
+
+- Pre-M15: 1249 tests (65 files)
+- Post-M15: 1258 tests (66 files)

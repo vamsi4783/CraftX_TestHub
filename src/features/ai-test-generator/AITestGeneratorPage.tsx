@@ -9,13 +9,15 @@
 import {
   Box, Container, Typography, Paper, Button, Step, Stepper, StepLabel,
   FormGroup, FormControlLabel, Checkbox, TextField, Alert, LinearProgress,
-  Divider, Snackbar, Stack, Chip, ToggleButtonGroup, ToggleButton,
+  Divider, Snackbar, Stack, Chip, ToggleButtonGroup, ToggleButton, Tooltip,
 } from '@mui/material';
 import AutoAwesomeIcon  from '@mui/icons-material/AutoAwesome';
 import DownloadIcon     from '@mui/icons-material/Download';
 import EditNoteIcon     from '@mui/icons-material/EditNote';
 import AccountTreeIcon  from '@mui/icons-material/AccountTree';
-import { useState } from 'react';
+import CableIcon        from '@mui/icons-material/Cable';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import type {
   TestSuggestion, TestCategory, GenerationOptions,
@@ -89,15 +91,19 @@ const PI_STEP_INDEX:     Record<WizardStep, number> = { input: 0, preview: -1, u
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function AITestGeneratorPage() {
+  const navigate       = useNavigate();
+  const [searchParams] = useSearchParams();
+
   // ── Mode ──────────────────────────────────────────────────────────────────────
   const [inputMode, setInputMode] = useState<InputMode>('manual');
 
   // ── Wizard state ─────────────────────────────────────────────────────────────
-  const [currentStep,   setCurrentStep]   = useState<WizardStep>('input');
-  const [isAnalyzing,   setIsAnalyzing]   = useState(false);
-  const [isGenerating,  setIsGenerating]  = useState(false);
-  const [analyzeError,  setAnalyzeError]  = useState<string | null>(null);
-  const [generateError, setGenerateError] = useState<string | null>(null);
+  const [currentStep,      setCurrentStep]      = useState<WizardStep>('input');
+  const [isAnalyzing,      setIsAnalyzing]      = useState(false);
+  const [isGenerating,     setIsGenerating]     = useState(false);
+  const [isConfiguringPI,  setIsConfiguringPI]  = useState(false);
+  const [analyzeError,     setAnalyzeError]     = useState<string | null>(null);
+  const [generateError,    setGenerateError]    = useState<string | null>(null);
 
   // ── Manual mode state ─────────────────────────────────────────────────────────
   const [projectModel, setProjectModel] = useState<ProjectModel | null>(null);
@@ -127,6 +133,16 @@ export function AITestGeneratorPage() {
   const [snackbar,   setSnackbar]   = useState<string | null>(null);
 
   const connectorStatus = aiOrchestrationService.getStatus();
+  const noConnector = !connectorStatus.hasUsableConnectors && !connectorStatus.edgeFunctionEnabled;
+
+  // Pre-select project from ?project= URL param and switch to PI mode
+  useEffect(() => {
+    const projectParam = searchParams.get('project');
+    if (projectParam) {
+      setPiProjectId(projectParam);
+      setInputMode('intelligence');
+    }
+  }, [searchParams]);
 
   // ── Mode switch: reset wizard ─────────────────────────────────────────────────
   const switchMode = (_: React.MouseEvent<HTMLElement>, next: InputMode | null) => {
@@ -190,6 +206,7 @@ export function AITestGeneratorPage() {
     options:    ContextGenerationOptions,
     projectId:  string,
   ) => {
+    setIsConfiguringPI(true);
     setPiKnowledge(knowledge);
     setPiOptions(options);
     setPiProjectId(projectId);
@@ -218,6 +235,7 @@ export function AITestGeneratorPage() {
     setPiTestPlan(plan);
 
     setCurrentStep('understanding');
+    setIsConfiguringPI(false);
   };
 
   const handlePIGenerate = async () => {
@@ -251,7 +269,8 @@ export function AITestGeneratorPage() {
     setSuggestions(prev => prev.map(s => s.status === 'pending' ? { ...s, status: 'rejected' } : s));
   const handleImported  = (count: number) => {
     setImportOpen(false);
-    setSnackbar(`${count} test case${count !== 1 ? 's' : ''} imported successfully.`);
+    const dest = piProjectId ? `/test-cases?project=${piProjectId}` : '/test-cases';
+    navigate(dest, { state: { imported: count } });
   };
 
   const toggleCategory = (cat: TestCategory) =>
@@ -380,15 +399,34 @@ export function AITestGeneratorPage() {
           <Stack direction="row" spacing={2} alignItems="center" mb={2}>
             <Typography variant="h6">Test Plan</Typography>
             <Box flex={1} />
+            {noConnector && (
+              <Alert
+                severity="warning"
+                icon={<CableIcon fontSize="small" />}
+                sx={{ py: 0, px: 1.5, fontSize: 12, alignItems: 'center' }}
+                action={
+                  <Button size="small" color="warning" onClick={() => navigate('/ai-connectors')}>
+                    Add connector
+                  </Button>
+                }
+              >
+                No AI connector configured
+              </Alert>
+            )}
             <Button size="small" onClick={() => setCurrentStep('understanding')}>← Back</Button>
-            <Button
-              variant="contained"
-              startIcon={<AutoAwesomeIcon />}
-              onClick={() => setCurrentStep('generate')}
-              disabled={!connectorStatus.hasUsableConnectors && !connectorStatus.edgeFunctionEnabled}
-            >
-              Configure & Generate →
-            </Button>
+            <Tooltip title={noConnector ? 'Configure an AI connector in AI Connectors to continue' : ''} arrow>
+              <span>
+                <Button
+                  variant="contained"
+                  startIcon={<AutoAwesomeIcon />}
+                  onClick={() => setCurrentStep('generate')}
+                  disabled={noConnector}
+                  sx={noConnector ? { opacity: 0.45 } : {}}
+                >
+                  Configure & Generate →
+                </Button>
+              </span>
+            </Tooltip>
           </Stack>
           <Typography variant="body2" color="text.secondary" mb={2}>
             Review the AI test plan before generating test cases. This shows what will be tested and why.
@@ -463,41 +501,61 @@ export function AITestGeneratorPage() {
             import them.
           </Alert>
 
-          {/* Connector status for PI mode */}
-          {inputMode === 'intelligence' && (
-            <Stack direction="row" spacing={1} alignItems="center" mb={2}>
-              <AutoAwesomeIcon fontSize="small" color={connectorStatus.hasUsableConnectors ? 'primary' : 'disabled'} />
-              {connectorStatus.hasUsableConnectors ? (
-                <Typography variant="caption">
-                  Using: <strong>{connectorStatus.activeConnectorName}</strong>
-                  {connectorStatus.activeConnectorModel ? ` (${connectorStatus.activeConnectorModel})` : ''}
-                </Typography>
-              ) : (
-                <Typography variant="caption" color="error">No connector available.</Typography>
-              )}
-              <Chip
-                label={connectorStatus.edgeFunctionEnabled ? 'Edge: ON' : 'Edge: OFF'}
-                size="small"
-                variant="outlined"
-                color={connectorStatus.edgeFunctionEnabled ? 'info' : 'default'}
-              />
-            </Stack>
+          {/* Connector status */}
+          <Stack direction="row" spacing={1} alignItems="center" mb={2}>
+            <AutoAwesomeIcon fontSize="small" color={connectorStatus.hasUsableConnectors ? 'primary' : 'disabled'} />
+            {connectorStatus.hasUsableConnectors ? (
+              <Typography variant="caption">
+                Using: <strong>{connectorStatus.activeConnectorName}</strong>
+                {connectorStatus.activeConnectorModel ? ` (${connectorStatus.activeConnectorModel})` : ''}
+              </Typography>
+            ) : (
+              <Typography variant="caption" color="text.secondary">No AI connector configured.</Typography>
+            )}
+            <Chip
+              label={connectorStatus.edgeFunctionEnabled ? 'Edge: ON' : 'Edge: OFF'}
+              size="small"
+              variant="outlined"
+              color={connectorStatus.edgeFunctionEnabled ? 'info' : 'default'}
+            />
+          </Stack>
+
+          {noConnector && (
+            <Alert
+              severity="warning"
+              icon={<CableIcon />}
+              sx={{ mb: 2 }}
+              action={
+                <Button size="small" color="warning" onClick={() => navigate('/ai-connectors')}>
+                  Configure
+                </Button>
+              }
+            >
+              An AI connector is required to generate tests. Add a connector (Gemini Flash, Ollama,
+              OpenAI-compatible, or MCP) from the AI Connectors page — TestHub uses your own API key,
+              not a shared key.
+            </Alert>
           )}
 
-          <Button
-            variant="contained"
-            startIcon={<AutoAwesomeIcon />}
-            onClick={inputMode === 'manual' ? handleManualGenerate : handlePIGenerate}
-            disabled={
-              isGenerating ||
-              (inputMode === 'manual' && selectedCategories.length === 0) ||
-              (inputMode === 'intelligence' && !piKnowledge) ||
-              (!connectorStatus.hasUsableConnectors && !connectorStatus.edgeFunctionEnabled)
-            }
-            size="large"
-          >
-            {isGenerating ? 'Generating…' : 'Generate Tests'}
-          </Button>
+          <Tooltip title={noConnector ? 'Add an AI connector to generate tests' : ''} arrow>
+            <span>
+              <Button
+                variant="contained"
+                startIcon={<AutoAwesomeIcon />}
+                onClick={inputMode === 'manual' ? handleManualGenerate : handlePIGenerate}
+                disabled={
+                  isGenerating ||
+                  (inputMode === 'manual' && selectedCategories.length === 0) ||
+                  (inputMode === 'intelligence' && !piKnowledge) ||
+                  noConnector
+                }
+                sx={noConnector ? { opacity: 0.45 } : {}}
+                size="large"
+              >
+                {isGenerating ? 'Generating…' : 'Generate Tests'}
+              </Button>
+            </span>
+          </Tooltip>
         </Paper>
       )}
 
