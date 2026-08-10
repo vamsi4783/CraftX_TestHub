@@ -75,7 +75,7 @@ export function BulkImportDialog({ open, suggestions, onClose, onImported, prove
   }, [projectId]);
 
   const handleImport = async () => {
-    if (!projectId || !moduleId) return;
+    if (!projectId) return;
     setImporting(true);
     setError(null);
     try {
@@ -89,7 +89,7 @@ export function BulkImportDialog({ open, suggestions, onClose, onImported, prove
         connector_model:           provenance.connector_model,
       } : undefined;
       const result = await aiTestGenerationEngine.importAccepted(
-        accepted, projectId, moduleId, user?.id ?? 'unknown', metadata,
+        accepted, projectId, moduleId || null, user?.id ?? 'unknown', metadata,
       );
       if (result.errors.length > 0) {
         setError(`${result.errors.length} error(s): ${result.errors[0]}`);
@@ -145,12 +145,13 @@ export function BulkImportDialog({ open, suggestions, onClose, onImported, prove
                 </FormControl>
 
                 <FormControl fullWidth size="small" disabled={!projectId || accepted.length === 0}>
-                  <InputLabel>Module</InputLabel>
+                  <InputLabel>Module (optional)</InputLabel>
                   <Select
-                    label="Module"
+                    label="Module (optional)"
                     value={moduleId}
                     onChange={e => setModuleId(e.target.value)}
                   >
+                    <MenuItem value="">— No module —</MenuItem>
                     {modules.map(m => (
                       <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
                     ))}
@@ -181,7 +182,7 @@ export function BulkImportDialog({ open, suggestions, onClose, onImported, prove
           <Button
             variant="contained"
             onClick={handleImport}
-            disabled={!projectId || !moduleId || importing || accepted.length === 0}
+            disabled={!projectId || importing || accepted.length === 0}
           >
             {importing ? 'Importing…' : `Import ${accepted.length} test${accepted.length !== 1 ? 's' : ''}`}
           </Button>

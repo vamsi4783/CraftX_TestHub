@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Box, Tabs, Tab, Grid, Card, CardContent, Typography, Button, Chip, LinearProgress, CircularProgress, Avatar, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Select, InputLabel, FormControl } from '@mui/material';
+import { Box, Tabs, Tab, Grid, Card, CardContent, Typography, Button, Chip, LinearProgress, CircularProgress, Avatar, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Select, InputLabel, FormControl, Tooltip } from '@mui/material';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import AssignmentIcon from '@mui/icons-material/Assignment';
@@ -242,13 +242,15 @@ export function ProjectDetailPage() {
               </Typography>
             </Box>
             {testCases.length > 0 && (
-              <Button
-                variant="contained"
-                startIcon={<PlayArrowIcon />}
-                onClick={() => navigate(`/test-executions/new?project=${id}`)}
-              >
-                Run Tests
-              </Button>
+              <Tooltip title="Assign test cases to a release to start execution" arrow>
+                <Button
+                  variant="contained"
+                  startIcon={<PlayArrowIcon />}
+                  onClick={() => navigate(`/projects/${id}`)}
+                >
+                  Go to Releases
+                </Button>
+              </Tooltip>
             )}
           </Box>
 

@@ -179,6 +179,7 @@ export function TestCasesPage() {
       <JsonImportDialog
         open={jsonImportOpen}
         onClose={() => setJsonImportOpen(false)}
+        defaultProjectId={filterProject || undefined}
         onImported={({ imported }) => {
           setJsonImportOpen(false);
           if (imported > 0) qc.invalidateQueries({ queryKey: ['test-cases'] });

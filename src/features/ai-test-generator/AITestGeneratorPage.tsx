@@ -29,6 +29,11 @@ import type { ProjectModel }      from '@/services/aiTestGenerator';
 import { aiOrchestrationService } from '@/features/ai-connectors/aiOrchestrationService';
 import type { ProjectKnowledge }  from '@/services/projectIngestion';
 import { testCaseService }         from '@/services/testCaseService';
+import { useProjectIngestionStore } from '@/features/project-ingestion/projectIngestionStore';
+import {
+  getProjectSources,
+  getProjectKnowledge,
+} from '@/services/projectIngestion/projectIngestionDbService';
 
 import { ProjectInputPanel }             from './ProjectInputPanel';
 import { ProjectModelPreview }           from './ProjectModelPreview';
@@ -135,12 +140,29 @@ export function AITestGeneratorPage() {
   const connectorStatus = aiOrchestrationService.getStatus();
   const noConnector = !connectorStatus.hasUsableConnectors && !connectorStatus.edgeFunctionEnabled;
 
-  // Pre-select project from ?project= URL param and switch to PI mode
+  // Pre-select project from ?project= URL param and switch to PI mode.
+  // Also hydrates the Zustand store from Supabase when the store is empty
+  // (happens on fresh navigation, direct URL, or cross-page navigation without
+  // first visiting the Project Intelligence page).
   useEffect(() => {
     const projectParam = searchParams.get('project');
-    if (projectParam) {
-      setPiProjectId(projectParam);
-      setInputMode('intelligence');
+    if (!projectParam) return;
+    setPiProjectId(projectParam);
+    setInputMode('intelligence');
+
+    const store = useProjectIngestionStore.getState();
+    const hasKnowledge = !!store.knowledge[projectParam];
+    const hasSources   = (store.sources[projectParam] ?? []).length > 0;
+
+    if (!hasKnowledge || !hasSources) {
+      Promise.all([
+        hasSources  ? Promise.resolve(null) : getProjectSources(projectParam),
+        hasKnowledge ? Promise.resolve(null) : getProjectKnowledge(projectParam),
+      ]).then(([srcs, knowledge]) => {
+        const { setSources, setKnowledge } = useProjectIngestionStore.getState();
+        if (srcs)      setSources(projectParam, srcs);
+        if (knowledge) setKnowledge(projectParam, knowledge);
+      }).catch(() => { /* non-fatal — panel shows "no sources" with a link to PI page */ });
     }
   }, [searchParams]);
 

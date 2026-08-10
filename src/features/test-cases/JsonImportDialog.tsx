@@ -17,14 +17,15 @@ interface Project { id: string; name: string; }
 interface Module  { id: string; name: string; project_id: string; }
 
 interface Props {
-  open:       boolean;
-  onClose:    () => void;
-  onImported: (result: { imported: number; duplicates: number; invalid: number }) => void;
+  open:               boolean;
+  onClose:            () => void;
+  onImported:         (result: { imported: number; duplicates: number; invalid: number }) => void;
+  defaultProjectId?:  string;
 }
 
 type Phase = 'pick' | 'preview' | 'target' | 'importing' | 'done';
 
-export function JsonImportDialog({ open, onClose, onImported }: Props) {
+export function JsonImportDialog({ open, onClose, onImported, defaultProjectId }: Props) {
   const fileRef     = useRef<HTMLInputElement>(null);
   const [phase, setPhase]       = useState<Phase>('pick');
   const [error, setError]       = useState<string | null>(null);
@@ -77,7 +78,16 @@ export function JsonImportDialog({ open, onClose, onImported }: Props) {
     try {
       const { data, error: e } = await supabase.from('projects').select('id, name').order('name');
       if (e) throw e;
-      setProjects(data ?? []);
+      const list = data ?? [];
+      setProjects(list);
+      // Pre-select project when a default is provided (e.g. coming from project context)
+      if (defaultProjectId && list.some(p => p.id === defaultProjectId)) {
+        setProjectId(defaultProjectId);
+        const { data: mods } = await supabase
+          .from('modules').select('id, name, project_id')
+          .eq('project_id', defaultProjectId).order('name');
+        setModules(mods ?? []);
+      }
       setPhase('target');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
